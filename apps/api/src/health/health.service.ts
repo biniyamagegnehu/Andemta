@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
-export interface HealthCheckResult {
-  status: 'ok' | 'degraded' | 'error';
+export interface HealthData {
+  status: 'ok';
   timestamp: string;
   service: string;
   version: string;
@@ -11,7 +11,7 @@ export interface HealthCheckResult {
 
 @Injectable()
 export class HealthService {
-  check(): HealthCheckResult {
+  check(): HealthData {
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
@@ -22,4 +22,3 @@ export class HealthService {
     };
   }
 }
-
