@@ -35,8 +35,12 @@ export function ApiStatus() {
         throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       }
 
-      const data: HealthData = await res.json();
-      setHealth(data);
+      const json = await res.json();
+      const healthData =
+        json && typeof json === 'object' && 'data' in json && json.data
+          ? (json.data as HealthData)
+          : (json as HealthData);
+      setHealth(healthData);
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Failed to reach API server';
