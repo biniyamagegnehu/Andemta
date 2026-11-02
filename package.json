@@ -14,7 +14,8 @@
     "dev:web": "npm run dev --workspace=@andemta/web",
     "build": "npm run build --workspace=@andemta/api && npm run build --workspace=@andemta/web",
     "lint": "npm run lint --workspace=@andemta/api && npm run lint --workspace=@andemta/web",
-    "test:api": "npm run test --workspace=@andemta/api"
+    "test:api": "npm run test --workspace=@andemta/api",
+    "test:api:e2e": "npm run test:e2e --workspace=@andemta/api"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
