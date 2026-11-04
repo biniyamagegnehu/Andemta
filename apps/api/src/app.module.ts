@@ -2,6 +2,9 @@ import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
 import { AppConfigModule } from './config/config.module';
+import { DatabaseModule } from './database/database.module';
+import { RedisModule } from './redis/redis.module';
+import { JobsModule } from './jobs/jobs.module';
 import { HealthModule } from './health/health.module';
 import { ExampleModule } from './example/example.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
@@ -10,6 +13,9 @@ import { REQUEST_ID_HEADER } from './common/constants';
 @Module({
   imports: [
     AppConfigModule,
+    DatabaseModule,
+    RedisModule,
+    JobsModule,
     LoggerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
