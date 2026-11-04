@@ -3,18 +3,51 @@ import { INestApplication } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import request = require('supertest');
 import { AppModule } from '../src/app.module';
+import { PrismaService } from '../src/database/prisma.service';
+import { RedisService } from '../src/redis/redis.service';
 import { TransformInterceptor } from '../src/common/interceptors/transform.interceptor';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 import { createGlobalValidationPipe } from '../src/common/pipes/validation.pipe';
 import { API_PREFIX } from '../src/common/constants';
 
+jest.setTimeout(60000);
+
 describe('Andemta API (e2e)', () => {
   let app: INestApplication;
+  let prismaMock: {
+    $connect: jest.Mock;
+    $disconnect: jest.Mock;
+    checkHealth: jest.Mock;
+  };
+  let redisMock: {
+    ping: jest.Mock;
+    checkHealth: jest.Mock;
+    getClient: jest.Mock;
+    onModuleDestroy: jest.Mock;
+  };
 
   beforeAll(async () => {
+    prismaMock = {
+      $connect: jest.fn().mockResolvedValue(undefined),
+      $disconnect: jest.fn().mockResolvedValue(undefined),
+      checkHealth: jest.fn().mockResolvedValue(true),
+    };
+
+    redisMock = {
+      ping: jest.fn().mockResolvedValue('PONG'),
+      checkHealth: jest.fn().mockResolvedValue(true),
+      getClient: jest.fn(),
+      onModuleDestroy: jest.fn().mockResolvedValue(undefined),
+    };
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(PrismaService)
+      .useValue(prismaMock)
+      .overrideProvider(RedisService)
+      .useValue(redisMock)
+      .compile();
 
     app = moduleFixture.createNestApplication();
 
@@ -29,11 +62,18 @@ describe('Andemta API (e2e)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
-  describe('Health Endpoint & API Prefix', () => {
-    it('GET /api/v1/health - should respond with 200 OK and standard success envelope', async () => {
+  beforeEach(() => {
+    prismaMock.checkHealth.mockResolvedValue(true);
+    redisMock.checkHealth.mockResolvedValue(true);
+  });
+
+  describe('Health Endpoints (Liveness & Readiness)', () => {
+    it('GET /api/v1/health - should respond with 200 OK and standard success envelope (Liveness)', async () => {
       const response = await request(app.getHttpServer())
         .get('/api/v1/health')
         .expect(200);
@@ -59,6 +99,60 @@ describe('Andemta API (e2e)', () => {
         .expect(200);
 
       expect(response.headers['x-request-id']).toBe(customId);
+    });
+
+    it('GET /api/v1/health/ready - should return 200 OK when PostgreSQL and Redis are both healthy', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/health/ready')
+        .expect(200);
+
+      expect(response.body).toEqual({
+        success: true,
+        message: 'Andemta API infrastructure is ready',
+        data: expect.objectContaining({
+          status: 'ok',
+          checks: {
+            database: expect.objectContaining({ status: 'up' }),
+            redis: expect.objectContaining({ status: 'up' }),
+          },
+        }),
+        meta: null,
+      });
+    });
+
+    it('GET /api/v1/health/ready - should return 503 Service Unavailable when PostgreSQL is down', async () => {
+      prismaMock.checkHealth.mockResolvedValue(false);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/health/ready')
+        .expect(503);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toContain('unavailable');
+      expect(response.body.errors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            field: 'database',
+          }),
+        ]),
+      );
+    });
+
+    it('GET /api/v1/health/ready - should return 503 Service Unavailable when Redis is down', async () => {
+      redisMock.checkHealth.mockResolvedValue(false);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/health/ready')
+        .expect(503);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.errors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            field: 'redis',
+          }),
+        ]),
+      );
     });
 
     it('GET /api/health (without prefix) - should return 404 with standard error envelope', async () => {
@@ -170,4 +264,3 @@ describe('Andemta API (e2e)', () => {
     });
   });
 });
-
