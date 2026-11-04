@@ -6,7 +6,7 @@ export interface AppConfiguration {
     enabled: boolean;
   };
   database: {
-    url?: string;
+    url: string;
   };
   redis: {
     host: string;
@@ -16,14 +16,18 @@ export interface AppConfiguration {
 }
 
 export default (): AppConfiguration => ({
-  nodeEnv: (process.env.NODE_ENV as 'development' | 'production' | 'test') || 'development',
+  nodeEnv:
+    (process.env.NODE_ENV as 'development' | 'production' | 'test') ||
+    'development',
   port: parseInt(process.env.PORT || '4000', 10),
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
   swagger: {
     enabled: process.env.SWAGGER_ENABLED !== 'false',
   },
   database: {
-    url: process.env.DATABASE_URL,
+    url:
+      process.env.DATABASE_URL ||
+      'postgresql://postgres:postgres@localhost:5432/andemta_db?schema=public',
   },
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
@@ -31,4 +35,3 @@ export default (): AppConfiguration => ({
     password: process.env.REDIS_PASSWORD || undefined,
   },
 });
-
