@@ -7,6 +7,7 @@ import { RedisModule } from './redis/redis.module';
 import { JobsModule } from './jobs/jobs.module';
 import { HealthModule } from './health/health.module';
 import { ExampleModule } from './example/example.module';
+import { AuthModule } from './modules/auth/auth.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { REQUEST_ID_HEADER } from './common/constants';
 
@@ -16,6 +17,7 @@ import { REQUEST_ID_HEADER } from './common/constants';
     DatabaseModule,
     RedisModule,
     JobsModule,
+    AuthModule,
     LoggerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {

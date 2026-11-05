@@ -74,6 +74,7 @@ async function bootstrap() {
       .setVersion('1.0')
       .addBearerAuth()
       .addTag('Health', 'System uptime and operational readiness endpoints')
+      .addTag('Auth', 'Authentication and account identity endpoints')
       .addTag('Examples', 'Foundation request lifecycle and validation demonstration endpoints')
       .build();
 
