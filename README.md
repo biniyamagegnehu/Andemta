@@ -284,6 +284,7 @@ Detailed architectural documentation is available in the `docs/` directory:
 - [Architectural Overview](docs/architecture/overview.md)
 - [Local Infrastructure Architecture](docs/architecture/local-infrastructure.md)
 - [Authentication Database Architecture](docs/architecture/authentication-database.md)
+- [Authentication Architecture & Registration Flow](docs/architecture/authentication.md)
 - [API Conventions & Health Check](docs/api/README.md)
 - [ADR 001: Monorepo & Technology Decisions](docs/decisions/001-monorepo-modular-monolith.md)
 
