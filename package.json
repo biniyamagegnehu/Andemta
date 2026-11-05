@@ -16,6 +16,7 @@
     "lint": "npm run lint --workspace=@andemta/api && npm run lint --workspace=@andemta/web",
     "test:api": "npm run test --workspace=@andemta/api",
     "test:api:e2e": "npm run test:e2e --workspace=@andemta/api",
+    "prisma:format": "npm run prisma:format --workspace=@andemta/api",
     "prisma:generate": "npm run prisma:generate --workspace=@andemta/api",
     "prisma:validate": "npm run prisma:validate --workspace=@andemta/api",
     "prisma:migrate:dev": "npm run prisma:migrate:dev --workspace=@andemta/api",
