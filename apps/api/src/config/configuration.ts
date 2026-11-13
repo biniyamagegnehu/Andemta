@@ -13,6 +13,17 @@ export interface AppConfiguration {
     port: number;
     password?: string;
   };
+  email: {
+    provider: string;
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    password?: string;
+    from: string;
+    tokenTtlMinutes: number;
+    verificationUrl: string;
+  };
 }
 
 export default (): AppConfiguration => ({
@@ -33,5 +44,21 @@ export default (): AppConfiguration => ({
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),
     password: process.env.REDIS_PASSWORD || undefined,
+  },
+  email: {
+    provider: process.env.EMAIL_PROVIDER || 'nodemailer',
+    host: process.env.EMAIL_HOST || 'smtp-relay.brevo.com',
+    port: parseInt(process.env.EMAIL_PORT || '587', 10),
+    secure: process.env.EMAIL_SECURE === 'true',
+    user: process.env.EMAIL_USER || '',
+    password: process.env.EMAIL_PASSWORD || undefined,
+    from: process.env.EMAIL_FROM || 'Andemta <no-reply@andemta.et>',
+    tokenTtlMinutes: parseInt(
+      process.env.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES || '30',
+      10,
+    ),
+    verificationUrl:
+      process.env.FRONTEND_EMAIL_VERIFICATION_URL ||
+      'http://localhost:3000/verify-email',
   },
 });
