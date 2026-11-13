@@ -275,6 +275,8 @@ Run these scripts from the repository root:
 | `npm run build` | All Apps | Builds the NestJS backend and Next.js frontend |
 | `npm run lint` | All Apps | Runs ESLint across all backend and frontend source files |
 | `npm run test:api` | `@andemta/api` | Executes backend unit and controller tests |
+| `npm run test:api:e2e` | `@andemta/api` | Executes backend end-to-end integration tests |
+| `npm run test:smtp` | Monorepo Root | Verifies Brevo SMTP connectivity and authentication |
 
 ---
 
@@ -285,6 +287,7 @@ Detailed architectural documentation is available in the `docs/` directory:
 - [Local Infrastructure Architecture](docs/architecture/local-infrastructure.md)
 - [Authentication Database Architecture](docs/architecture/authentication-database.md)
 - [Authentication Architecture & Registration Flow](docs/architecture/authentication.md)
+- [Email Verification & Brevo SMTP Integration](docs/architecture/email-verification.md)
 - [API Conventions & Health Check](docs/api/README.md)
 - [ADR 001: Monorepo & Technology Decisions](docs/decisions/001-monorepo-modular-monolith.md)
 

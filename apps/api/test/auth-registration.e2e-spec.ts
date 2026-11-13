@@ -6,6 +6,7 @@ import * as argon2 from 'argon2';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 import { RedisService } from '../src/redis/redis.service';
+import { EMAIL_PROVIDER } from '../src/modules/email/interfaces/email-provider.interface';
 import { TransformInterceptor } from '../src/common/interceptors/transform.interceptor';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 import { createGlobalValidationPipe } from '../src/common/pipes/validation.pipe';
@@ -27,11 +28,17 @@ describe('Authentication — User Registration (Integration)', () => {
       onModuleDestroy: jest.fn().mockResolvedValue(undefined),
     };
 
+    const emailProviderMock = {
+      sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
+    };
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
       .overrideProvider(RedisService)
       .useValue(redisMock)
+      .overrideProvider(EMAIL_PROVIDER)
+      .useValue(emailProviderMock)
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -119,11 +126,19 @@ describe('Authentication — User Registration (Integration)', () => {
       });
       expect(sessionCount).toBe(0);
 
-      // Verify no EmailVerificationToken record was created
+      // Verify EmailVerificationToken record was automatically created upon registration (Phase 3.3)
       const tokenCount = await prisma.emailVerificationToken.count({
         where: { userId: registeredUserId },
       });
-      expect(tokenCount).toBe(0);
+      expect(tokenCount).toBe(1);
+
+      const tokenRecord = await prisma.emailVerificationToken.findFirst({
+        where: { userId: registeredUserId },
+      });
+      expect(tokenRecord).toBeDefined();
+      expect(tokenRecord?.usedAt).toBeNull();
+      expect(tokenRecord?.expiresAt.getTime()).toBeGreaterThan(Date.now());
+      expect(tokenRecord?.tokenHash).toBeDefined();
     });
 
     it('should reject duplicate normalized email with 409 Conflict', async () => {
