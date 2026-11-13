@@ -1,18 +1,30 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { EmailVerificationService } from './services/email-verification.service';
 import { RegisterDto } from './dto/register.dto';
 import { RegisterResponseDto } from './dto/register-response.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
+import { ResendVerificationDto } from './dto/resend-verification.dto';
 
 describe('AuthController', () => {
   let controller: AuthController;
   let authServiceMock: {
     register: jest.Mock;
   };
+  let emailVerificationMock: {
+    verifyEmail: jest.Mock;
+    resendVerification: jest.Mock;
+  };
 
   beforeEach(async () => {
     authServiceMock = {
       register: jest.fn(),
+    };
+
+    emailVerificationMock = {
+      verifyEmail: jest.fn(),
+      resendVerification: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -21,6 +33,10 @@ describe('AuthController', () => {
         {
           provide: AuthService,
           useValue: authServiceMock,
+        },
+        {
+          provide: EmailVerificationService,
+          useValue: emailVerificationMock,
         },
       ],
     }).compile();
@@ -54,5 +70,42 @@ describe('AuthController', () => {
       expect(result).toEqual(expectedResponse);
     });
   });
+
+  describe('verifyEmail', () => {
+    it('should call emailVerificationService.verifyEmail and return result', async () => {
+      const dto: VerifyEmailDto = { token: 'sample-raw-token-123' };
+      const expected = {
+        email: 'researcher@andemta.et',
+        emailVerifiedAt: new Date(),
+      };
+
+      emailVerificationMock.verifyEmail.mockResolvedValueOnce(expected);
+
+      const result = await controller.verifyEmail(dto);
+
+      expect(emailVerificationMock.verifyEmail).toHaveBeenCalledWith(dto.token);
+      expect(result).toEqual(expected);
+    });
+  });
+
+  describe('resendVerification', () => {
+    it('should call emailVerificationService.resendVerification and return generic response', async () => {
+      const dto: ResendVerificationDto = { email: 'researcher@andemta.et' };
+      const expected = {
+        message:
+          'If an account requires email verification, a verification email will be sent.',
+      };
+
+      emailVerificationMock.resendVerification.mockResolvedValueOnce(expected);
+
+      const result = await controller.resendVerification(dto);
+
+      expect(emailVerificationMock.resendVerification).toHaveBeenCalledWith(
+        dto.email,
+      );
+      expect(result).toEqual(expected);
+    });
+  });
 });
+
 

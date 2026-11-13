@@ -6,6 +6,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { PasswordHashingService } from './services/password-hashing.service';
+import { EmailVerificationService } from './services/email-verification.service';
 import { RegisterDto } from './dto/register.dto';
 import { RegisterResponseDto } from './dto/register-response.dto';
 
@@ -16,6 +17,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly passwordHashingService: PasswordHashingService,
+    private readonly emailVerificationService: EmailVerificationService,
   ) {}
 
   /**
@@ -75,7 +77,27 @@ export class AuthService {
 
       this.logger.log(`User registered successfully (id: ${createdUser.id})`);
 
-      // 4. Return explicit safe response object
+      // 4. Automatically trigger email verification dispatch (Phase 3.3)
+      try {
+        const emailResult =
+          await this.emailVerificationService.issueVerificationToken(
+            createdUser.id,
+            createdUser.email,
+          );
+
+        if (!emailResult.success) {
+          this.logger.warn(
+            `Verification email delivery was not completed for user ${createdUser.id}`,
+          );
+        }
+      } catch (emailError) {
+        // Log delivery error; user remains registered and can use resend-verification endpoint
+        this.logger.error(
+          `Unexpected error dispatching verification email for user ${createdUser.id}: ${(emailError as Error).message}`,
+        );
+      }
+
+      // 5. Return explicit safe response object
       return {
         id: createdUser.id,
         email: createdUser.email,

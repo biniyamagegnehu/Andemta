@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../../database/prisma.service';
 import { PasswordHashingService } from './services/password-hashing.service';
+import { EmailVerificationService } from './services/email-verification.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -16,6 +17,9 @@ describe('AuthService', () => {
   let passwordHashingMock: {
     hash: jest.Mock;
     verify: jest.Mock;
+  };
+  let emailVerificationMock: {
+    issueVerificationToken: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -31,11 +35,16 @@ describe('AuthService', () => {
       verify: jest.fn().mockResolvedValue(true),
     };
 
+    emailVerificationMock = {
+      issueVerificationToken: jest.fn().mockResolvedValue({ success: true }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: PasswordHashingService, useValue: passwordHashingMock },
+        { provide: EmailVerificationService, useValue: emailVerificationMock },
       ],
     }).compile();
 
@@ -104,6 +113,11 @@ describe('AuthService', () => {
         },
       });
 
+      // Verify verification token issuance was triggered
+      expect(
+        emailVerificationMock.issueVerificationToken,
+      ).toHaveBeenCalledWith(mockCreatedUser.id, expectedNormalizedEmail);
+
       // Verify safe response format (no sensitive fields)
       expect(result).toEqual({
         id: mockCreatedUser.id,
@@ -113,6 +127,25 @@ describe('AuthService', () => {
       });
       expect((result as unknown as Record<string, unknown>).password).toBeUndefined();
       expect((result as unknown as Record<string, unknown>).passwordHash).toBeUndefined();
+    });
+
+    it('should complete registration successfully even if verification email delivery fails', async () => {
+      prismaMock.user.findUnique.mockResolvedValue(null);
+      prismaMock.user.create.mockResolvedValue(mockCreatedUser);
+      emailVerificationMock.issueVerificationToken.mockResolvedValueOnce({
+        success: false,
+        error: new Error('Brevo service down'),
+      });
+
+      const result = await service.register(rawDto);
+
+      expect(result).toEqual({
+        id: mockCreatedUser.id,
+        email: expectedNormalizedEmail,
+        emailVerifiedAt: null,
+        createdAt: mockCreatedUser.createdAt,
+      });
+      expect(prismaMock.user.create).toHaveBeenCalled();
     });
 
     it('should throw ConflictException if normalized email already exists', async () => {
