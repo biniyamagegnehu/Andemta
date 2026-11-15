@@ -288,6 +288,7 @@ Detailed architectural documentation is available in the `docs/` directory:
 - [Authentication Database Architecture](docs/architecture/authentication-database.md)
 - [Authentication Architecture & Registration Flow](docs/architecture/authentication.md)
 - [Email Verification & Brevo SMTP Integration](docs/architecture/email-verification.md)
+- [Access Token Authentication & Login Flow](docs/architecture/access-token-authentication.md)
 - [API Conventions & Health Check](docs/api/README.md)
 - [ADR 001: Monorepo & Technology Decisions](docs/decisions/001-monorepo-modular-monolith.md)
 
