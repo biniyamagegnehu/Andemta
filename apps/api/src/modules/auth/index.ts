@@ -7,5 +7,12 @@ export * from './dto/register.dto';
 export * from './dto/register-response.dto';
 export * from './dto/verify-email.dto';
 export * from './dto/resend-verification.dto';
+export * from './dto/login.dto';
+export * from './dto/login-response.dto';
+export * from './guards/jwt-auth.guard';
+export * from './strategies/jwt.strategy';
+export * from './decorators/current-user.decorator';
+export * from './interfaces/jwt-payload.interface';
+export * from './interfaces/authenticated-user.interface';
 export * from './constants/auth.constants';
-
+export * from './utils/token.utils';

@@ -6,11 +6,15 @@ import { RegisterDto } from './dto/register.dto';
 import { RegisterResponseDto } from './dto/register-response.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
+import { LoginDto } from './dto/login.dto';
+import { LoginResponseDto } from './dto/login-response.dto';
+import { AuthenticatedUser } from './interfaces/authenticated-user.interface';
 
 describe('AuthController', () => {
   let controller: AuthController;
   let authServiceMock: {
     register: jest.Mock;
+    login: jest.Mock;
   };
   let emailVerificationMock: {
     verifyEmail: jest.Mock;
@@ -20,6 +24,7 @@ describe('AuthController', () => {
   beforeEach(async () => {
     authServiceMock = {
       register: jest.fn(),
+      login: jest.fn(),
     };
 
     emailVerificationMock = {
@@ -106,6 +111,45 @@ describe('AuthController', () => {
       expect(result).toEqual(expected);
     });
   });
+
+  describe('login', () => {
+    it('should call authService.login and return token response', async () => {
+      const dto: LoginDto = {
+        email: 'researcher@andemta.et',
+        password: 'ValidPassword123!',
+      };
+
+      const expectedResponse: LoginResponseDto = {
+        accessToken: 'signed-access-token',
+        tokenType: 'Bearer',
+        expiresIn: 900,
+        user: {
+          id: 'user-uuid-1',
+          email: 'researcher@andemta.et',
+          emailVerifiedAt: new Date('2026-11-14T10:00:00.000Z'),
+        },
+      };
+
+      authServiceMock.login.mockResolvedValue(expectedResponse);
+
+      const result = await controller.login(dto);
+
+      expect(authServiceMock.login).toHaveBeenCalledWith(dto);
+      expect(result).toEqual(expectedResponse);
+    });
+  });
+
+  describe('getProfile', () => {
+    it('should return the authenticated user passed by CurrentUser decorator', async () => {
+      const user: AuthenticatedUser = {
+        id: 'user-uuid-1',
+        email: 'researcher@andemta.et',
+        emailVerifiedAt: new Date('2026-11-14T10:00:00.000Z'),
+      };
+
+      const result = await controller.getProfile(user);
+
+      expect(result).toEqual(user);
+    });
+  });
 });
-
-

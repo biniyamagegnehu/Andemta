@@ -1,14 +1,17 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse as SwaggerApiResponse,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { EmailVerificationService } from './services/email-verification.service';
@@ -16,6 +19,11 @@ import { RegisterDto } from './dto/register.dto';
 import { RegisterResponseDto } from './dto/register-response.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
+import { LoginDto } from './dto/login.dto';
+import { LoginResponseDto, LoginUserDto } from './dto/login-response.dto';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { CurrentUser } from './decorators/current-user.decorator';
+import { AuthenticatedUser } from './interfaces/authenticated-user.interface';
 import { ResponseMessage } from '../../common/decorators/response-message.decorator';
 
 @ApiTags('Auth')
@@ -94,6 +102,59 @@ export class AuthController {
   async resendVerification(@Body() dto: ResendVerificationDto) {
     return this.emailVerificationService.resendVerification(dto.email);
   }
+
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Authenticate user credentials and issue access token',
+    description:
+      'Validates email and password, enforces email verification requirement, and returns a signed short-lived JWT access token. Does not create persistent sessions or refresh tokens in this phase.',
+  })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Login successful',
+    type: LoginResponseDto,
+  })
+  @SwaggerApiResponse({
+    status: 400,
+    description:
+      'Validation failed (e.g. invalid email address format, missing password)',
+  })
+  @SwaggerApiResponse({
+    status: 401,
+    description:
+      'Invalid email or password, or email verification is required before login',
+  })
+  @ResponseMessage('Login successful')
+  async login(@Body() dto: LoginDto): Promise<LoginResponseDto> {
+    return this.authService.login(dto);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get current authenticated user profile',
+    description:
+      'Retrieves safe authenticated user claims from the verified JWT access token. Demonstrates JwtAuthGuard and @CurrentUser() decorator.',
+  })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Profile retrieved successfully',
+    type: LoginUserDto,
+  })
+  @SwaggerApiResponse({
+    status: 401,
+    description: 'Missing, invalid, or expired access token',
+  })
+  @ResponseMessage('Profile retrieved successfully')
+  async getProfile(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<AuthenticatedUser> {
+    return user;
+  }
 }
+
 
 
