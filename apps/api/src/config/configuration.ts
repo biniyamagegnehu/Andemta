@@ -24,6 +24,12 @@ export interface AppConfiguration {
     tokenTtlMinutes: number;
     verificationUrl: string;
   };
+  jwt: {
+    accessSecret: string;
+    accessExpiresIn: string;
+    issuer: string;
+    audience: string;
+  };
 }
 
 export default (): AppConfiguration => ({
@@ -60,5 +66,11 @@ export default (): AppConfiguration => ({
     verificationUrl:
       process.env.FRONTEND_EMAIL_VERIFICATION_URL ||
       'http://localhost:3000/verify-email',
+  },
+  jwt: {
+    accessSecret: process.env.JWT_ACCESS_SECRET || '',
+    accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
+    issuer: process.env.JWT_ISSUER || 'andemta-api',
+    audience: process.env.JWT_AUDIENCE || 'andemta-client',
   },
 });

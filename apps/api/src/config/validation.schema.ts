@@ -37,4 +37,10 @@ export const environmentValidationSchema = Joi.object({
   FRONTEND_EMAIL_VERIFICATION_URL: Joi.string()
     .uri()
     .default('http://localhost:3000/verify-email'),
+
+  // JWT Access Token configuration (Phase 3.4)
+  JWT_ACCESS_SECRET: Joi.string().min(32).required(),
+  JWT_ACCESS_EXPIRES_IN: Joi.string().default('15m'),
+  JWT_ISSUER: Joi.string().default('andemta-api'),
+  JWT_AUDIENCE: Joi.string().default('andemta-client'),
 });
