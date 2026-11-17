@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import cookieParser from 'cookie-parser';
 import request = require('supertest');
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
@@ -51,6 +52,7 @@ describe('Authentication — Login & Access Tokens (Integration)', () => {
 
     app = moduleFixture.createNestApplication();
 
+    app.use(cookieParser());
     app.setGlobalPrefix(API_PREFIX);
     app.useGlobalPipes(createGlobalValidationPipe());
     const reflector = app.get(Reflector);
@@ -121,7 +123,15 @@ describe('Authentication — Login & Access Tokens (Integration)', () => {
 
       // Ensure no sensitive hash or token fields leaked
       expect(loginRes.body.data.user.passwordHash).toBeUndefined();
-      expect(loginRes.body.data.refreshToken).toBeUndefined();
+      expect(loginRes.body.data.rawRefreshToken).toBeUndefined();
+
+      // 3b. Verify HttpOnly refresh cookie is set
+      const setCookieHeader = loginRes.headers['set-cookie'] as string[] | string;
+      const cookieStr = Array.isArray(setCookieHeader)
+        ? setCookieHeader.join('; ')
+        : setCookieHeader || '';
+      expect(cookieStr).toContain('andemta_refresh=');
+      expect(cookieStr.toLowerCase()).toContain('httponly');
 
       const accessToken = loginRes.body.data.accessToken;
       expect(typeof accessToken).toBe('string');
@@ -138,11 +148,11 @@ describe('Authentication — Login & Access Tokens (Integration)', () => {
       expect(meRes.body.data.emailVerifiedAt).not.toBeNull();
       expect(meRes.body.data.passwordHash).toBeUndefined();
 
-      // 5. Confirm that NO Session database record was created
+      // 5. Confirm that a Session database record WAS created (Phase 3.5)
       const sessions = await prisma.session.findMany({
         where: { userId },
       });
-      expect(sessions.length).toBe(0);
+      expect(sessions.length).toBeGreaterThanOrEqual(1);
     });
   });
 
