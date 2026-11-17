@@ -15,8 +15,13 @@ import { RegisterDto } from './dto/register.dto';
 import { RegisterResponseDto } from './dto/register-response.dto';
 import { LoginDto } from './dto/login.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
+import { SessionService } from './services/session.service';
 import { DUMMY_ARGON2_HASH } from './constants/auth.constants';
 import { parseDurationToSeconds } from './utils/token.utils';
+
+export interface LoginResult extends LoginResponseDto {
+  rawRefreshToken: string;
+}
 
 @Injectable()
 export class AuthService {
@@ -28,6 +33,7 @@ export class AuthService {
     private readonly emailVerificationService: EmailVerificationService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly sessionService: SessionService,
   ) {}
 
   /**
@@ -139,7 +145,8 @@ export class AuthService {
   }
 
   /**
-   * Authenticates user credentials and issues a short-lived signed JWT access token.
+   * Authenticates user credentials, issues a short-lived signed JWT access token,
+   * and establishes a persistent session with an opaque refresh token.
    *
    * Flow & Security:
    * 1. Normalizes email (trim & lowercase) to ensure case-insensitive matching.
@@ -148,12 +155,19 @@ export class AuthService {
    * 3. Verifies plaintext password against Argon2id hash. Rejects incorrect credentials generically.
    * 4. Enforces email verification requirement (emailVerifiedAt must be set).
    * 5. Generates minimal signed JWT access token with unique JTI, issuer, audience, and expiration.
-   * 6. Returns safe user projection without exposing hashes, secrets, or internal persistence fields.
+   * 6. Creates a persistent Session with a SHA-256 hashed refresh token and unique token family.
+   * 7. Returns safe user projection and access token, plus raw refresh token for cookie transport.
    *
    * @param dto Validated login credentials (email & plaintext password)
-   * @returns Signed JWT access token, token type, expiry duration, and safe user projection
+   * @param userAgent Optional client User-Agent
+   * @param ipAddress Optional client IP address
+   * @returns Login result containing access token, safe user projection, and raw refresh token
    */
-  async login(dto: LoginDto): Promise<LoginResponseDto> {
+  async login(
+    dto: LoginDto,
+    userAgent?: string,
+    ipAddress?: string,
+  ): Promise<LoginResult> {
     const normalizedEmail = this.normalizeEmail(dto.email);
 
     // 1. Database user lookup by normalized email
@@ -196,9 +210,16 @@ export class AuthService {
     // 5. Generate signed JWT access token with explicit algorithm and claims
     const tokenResult = await this.generateAccessToken(user.id);
 
+    // 6. Create persistent authentication session and opaque refresh token
+    const sessionResult = await this.sessionService.createSession(
+      user.id,
+      userAgent,
+      ipAddress,
+    );
+
     this.logger.log(`User logged in successfully (id: ${user.id})`);
 
-    // 6. Return response contract without exposing internal or sensitive fields
+    // 7. Return response contract along with raw refresh token for cookie transport
     return {
       accessToken: tokenResult.accessToken,
       tokenType: 'Bearer',
@@ -208,7 +229,63 @@ export class AuthService {
         email: user.email,
         emailVerifiedAt: user.emailVerifiedAt,
       },
+      rawRefreshToken: sessionResult.rawRefreshToken,
     };
+  }
+
+  /**
+   * Refreshes an expired access token using an opaque refresh token with automatic rotation.
+   * Enforces reuse detection and revokes compromised token families.
+   *
+   * @param rawRefreshToken Presented opaque refresh token
+   * @param userAgent Optional client User-Agent
+   * @param ipAddress Optional client IP address
+   * @returns Fresh access token, expiration, user profile, and new raw refresh token
+   */
+  async refreshSession(
+    rawRefreshToken: string,
+    userAgent?: string,
+    ipAddress?: string,
+  ): Promise<{ loginResponse: LoginResponseDto; rawRefreshToken: string }> {
+    const rotationResult = await this.sessionService.rotateSession(
+      rawRefreshToken,
+      userAgent,
+      ipAddress,
+    );
+
+    const tokenResult = await this.generateAccessToken(rotationResult.userId);
+
+    return {
+      loginResponse: {
+        accessToken: tokenResult.accessToken,
+        tokenType: 'Bearer',
+        expiresIn: tokenResult.expiresIn,
+        user: {
+          id: rotationResult.user.id,
+          email: rotationResult.user.email,
+          emailVerifiedAt: rotationResult.user.emailVerifiedAt,
+        },
+      },
+      rawRefreshToken: rotationResult.newRawRefreshToken,
+    };
+  }
+
+  /**
+   * Logs out the current session by revoking its token family.
+   *
+   * @param rawRefreshToken Presented opaque refresh token
+   */
+  async logout(rawRefreshToken: string): Promise<void> {
+    await this.sessionService.revokeSession(rawRefreshToken);
+  }
+
+  /**
+   * Logs out all sessions across all devices for the specified user.
+   *
+   * @param userId Authenticated user UUID
+   */
+  async logoutAll(userId: string): Promise<void> {
+    await this.sessionService.revokeAllUserSessions(userId);
   }
 
   /**

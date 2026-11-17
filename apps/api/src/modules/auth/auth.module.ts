@@ -6,8 +6,10 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { PasswordHashingService } from './services/password-hashing.service';
 import { EmailVerificationService } from './services/email-verification.service';
+import { SessionService } from './services/session.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { CsrfOriginGuard } from './guards/csrf-origin.guard';
 import { EmailModule } from '../email/email.module';
 
 @Module({
@@ -42,14 +44,18 @@ import { EmailModule } from '../email/email.module';
     AuthService,
     PasswordHashingService,
     EmailVerificationService,
+    SessionService,
     JwtStrategy,
     JwtAuthGuard,
+    CsrfOriginGuard,
   ],
   exports: [
     AuthService,
     PasswordHashingService,
     EmailVerificationService,
+    SessionService,
     JwtAuthGuard,
+    CsrfOriginGuard,
     JwtStrategy,
     PassportModule,
     JwtModule,

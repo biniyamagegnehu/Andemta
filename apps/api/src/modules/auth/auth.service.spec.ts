@@ -7,6 +7,7 @@ import { AuthService } from './auth.service';
 import { PrismaService } from '../../database/prisma.service';
 import { PasswordHashingService } from './services/password-hashing.service';
 import { EmailVerificationService } from './services/email-verification.service';
+import { SessionService } from './services/session.service';
 import { DUMMY_ARGON2_HASH } from './constants/auth.constants';
 
 describe('AuthService', () => {
@@ -33,6 +34,12 @@ describe('AuthService', () => {
   let configServiceMock: {
     get: jest.Mock;
   };
+  let sessionServiceMock: {
+    createSession: jest.Mock;
+    rotateSession: jest.Mock;
+    revokeSession: jest.Mock;
+    revokeAllUserSessions: jest.Mock;
+  };
 
   beforeEach(async () => {
     prismaMock = {
@@ -55,6 +62,19 @@ describe('AuthService', () => {
       signAsync: jest.fn().mockResolvedValue('mocked-signed-jwt-access-token'),
     };
 
+    sessionServiceMock = {
+      createSession: jest.fn().mockResolvedValue({
+        rawRefreshToken: 'mock-raw-refresh-token',
+        session: {
+          id: 'mock-session-id',
+          tokenFamily: 'mock-family-id',
+        },
+      }),
+      rotateSession: jest.fn(),
+      revokeSession: jest.fn(),
+      revokeAllUserSessions: jest.fn(),
+    };
+
     configServiceMock = {
       get: jest.fn((key: string) => {
         if (key === 'jwt.accessSecret')
@@ -74,6 +94,7 @@ describe('AuthService', () => {
         { provide: EmailVerificationService, useValue: emailVerificationMock },
         { provide: JwtService, useValue: jwtServiceMock },
         { provide: ConfigService, useValue: configServiceMock },
+        { provide: SessionService, useValue: sessionServiceMock },
       ],
     }).compile();
 
@@ -270,14 +291,19 @@ describe('AuthService', () => {
           email: existingVerifiedUser.email,
           emailVerifiedAt: verifiedDate,
         },
+        rawRefreshToken: 'mock-raw-refresh-token',
       });
 
-      // 5. No sensitive fields leaked
+      // 5. Session service was called to establish a persistent session
+      expect(sessionServiceMock.createSession).toHaveBeenCalledWith(
+        existingVerifiedUser.id,
+        undefined,
+        undefined,
+      );
+
+      // 6. No sensitive password hash leaked
       expect(
         (result.user as unknown as Record<string, unknown>).passwordHash,
-      ).toBeUndefined();
-      expect(
-        (result as unknown as Record<string, unknown>).refreshToken,
       ).toBeUndefined();
     });
 
@@ -344,21 +370,72 @@ describe('AuthService', () => {
       expect(jwtServiceMock.signAsync).not.toHaveBeenCalled();
     });
 
-    it('should not create a Session database record or return a refresh token', async () => {
+    it('should create a persistent Session and return rawRefreshToken for HttpOnly cookie transport', async () => {
       prismaMock.user.findUnique.mockResolvedValue(existingVerifiedUser);
       passwordHashingMock.verify.mockResolvedValue(true);
 
-      const result = await service.login(validLoginDto);
+      const result = await service.login(
+        validLoginDto,
+        'Custom-Agent/1.0',
+        '192.168.1.1',
+      );
 
-      expect(
-        (prismaMock as Record<string, unknown>).session,
-      ).toBeUndefined();
-      expect(
-        (result as unknown as Record<string, unknown>).refreshToken,
-      ).toBeUndefined();
-      expect(
-        (result as unknown as Record<string, unknown>).sessionId,
-      ).toBeUndefined();
+      expect(sessionServiceMock.createSession).toHaveBeenCalledWith(
+        existingVerifiedUser.id,
+        'Custom-Agent/1.0',
+        '192.168.1.1',
+      );
+      expect(result.rawRefreshToken).toBe('mock-raw-refresh-token');
+    });
+  });
+
+  describe('refreshSession', () => {
+    it('should rotate session and generate a new signed access token', async () => {
+      const mockRotationResult = {
+        newRawRefreshToken: 'new-raw-refresh-token-xyz',
+        session: { id: 'new-session-id' },
+        userId: 'user-uuid-123',
+        user: {
+          id: 'user-uuid-123',
+          email: 'user@andemta.et',
+          emailVerifiedAt: new Date(),
+        },
+      };
+
+      sessionServiceMock.rotateSession.mockResolvedValue(mockRotationResult);
+
+      const result = await service.refreshSession(
+        'current-raw-token',
+        'Mozilla/5.0',
+        '127.0.0.1',
+      );
+
+      expect(sessionServiceMock.rotateSession).toHaveBeenCalledWith(
+        'current-raw-token',
+        'Mozilla/5.0',
+        '127.0.0.1',
+      );
+      expect(result.rawRefreshToken).toBe('new-raw-refresh-token-xyz');
+      expect(result.loginResponse.accessToken).toBe(
+        'mocked-signed-jwt-access-token',
+      );
+      expect(result.loginResponse.user.email).toBe('user@andemta.et');
+    });
+  });
+
+  describe('logout', () => {
+    it('should delegate session family revocation to SessionService', async () => {
+      await service.logout('some-token');
+      expect(sessionServiceMock.revokeSession).toHaveBeenCalledWith('some-token');
+    });
+  });
+
+  describe('logoutAll', () => {
+    it('should delegate all-sessions revocation to SessionService', async () => {
+      await service.logoutAll('user-123');
+      expect(sessionServiceMock.revokeAllUserSessions).toHaveBeenCalledWith(
+        'user-123',
+      );
     });
   });
 

@@ -6,6 +6,9 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
+  Req,
+  Res,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -13,6 +16,8 @@ import {
   ApiResponse as SwaggerApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { Request, Response } from 'express';
+import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { EmailVerificationService } from './services/email-verification.service';
 import { RegisterDto } from './dto/register.dto';
@@ -22,9 +27,11 @@ import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { LoginDto } from './dto/login.dto';
 import { LoginResponseDto, LoginUserDto } from './dto/login-response.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { CsrfOriginGuard } from './guards/csrf-origin.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { AuthenticatedUser } from './interfaces/authenticated-user.interface';
 import { ResponseMessage } from '../../common/decorators/response-message.decorator';
+import { setRefreshCookie, clearRefreshCookie } from './utils/cookie.utils';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -32,6 +39,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly emailVerificationService: EmailVerificationService,
+    private readonly configService: ConfigService,
   ) {}
 
   @Post('register')
@@ -106,13 +114,15 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Authenticate user credentials and issue access token',
+    summary:
+      'Authenticate user credentials, issue access token and set refresh cookie',
     description:
-      'Validates email and password, enforces email verification requirement, and returns a signed short-lived JWT access token. Does not create persistent sessions or refresh tokens in this phase.',
+      'Validates email and password, enforces email verification requirement, generates a signed short-lived JWT access token, creates a persistent session in PostgreSQL, and delivers an opaque refresh token via HttpOnly cookie.',
   })
   @SwaggerApiResponse({
     status: 200,
-    description: 'Login successful',
+    description:
+      'Login successful. Access token returned in JSON body, refresh token set as HttpOnly cookie.',
     type: LoginResponseDto,
   })
   @SwaggerApiResponse({
@@ -126,8 +136,139 @@ export class AuthController {
       'Invalid email or password, or email verification is required before login',
   })
   @ResponseMessage('Login successful')
-  async login(@Body() dto: LoginDto): Promise<LoginResponseDto> {
-    return this.authService.login(dto);
+  async login(
+    @Body() dto: LoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<LoginResponseDto> {
+    const userAgent = req.headers['user-agent'];
+    const ipAddress = req.ip;
+    const { rawRefreshToken, ...loginResponse } =
+      await this.authService.login(dto, userAgent, ipAddress);
+
+    setRefreshCookie(res, rawRefreshToken, this.configService);
+    return loginResponse;
+  }
+
+  @Post('refresh')
+  @UseGuards(CsrfOriginGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Rotate refresh token and issue new access token',
+    description:
+      'Consumes the HttpOnly refresh token cookie, validates session persistence, detects token reuse, rotates to a new refresh token (setting a new HttpOnly cookie), and returns a fresh JWT access token.',
+  })
+  @SwaggerApiResponse({
+    status: 200,
+    description:
+      'Token refreshed successfully. Fresh access token returned and new refresh cookie set.',
+    type: LoginResponseDto,
+  })
+  @SwaggerApiResponse({
+    status: 401,
+    description:
+      'Missing, invalid, expired, revoked, or reused refresh token (token family revoked on reuse detection)',
+  })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Untrusted request origin (CSRF defense)',
+  })
+  @ResponseMessage('Token refreshed successfully')
+  async refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<LoginResponseDto> {
+    const cookieName =
+      this.configService.get<string>('auth.refreshCookieName') ||
+      'andemta_refresh';
+    const rawRefreshToken = req.cookies?.[cookieName];
+
+    if (!rawRefreshToken) {
+      clearRefreshCookie(res, this.configService);
+      throw new UnauthorizedException('Refresh token is required');
+    }
+
+    try {
+      const userAgent = req.headers['user-agent'];
+      const ipAddress = req.ip;
+      const { loginResponse, rawRefreshToken: newRawRefreshToken } =
+        await this.authService.refreshSession(
+          rawRefreshToken,
+          userAgent,
+          ipAddress,
+        );
+
+      setRefreshCookie(res, newRawRefreshToken, this.configService);
+      return loginResponse;
+    } catch (error) {
+      clearRefreshCookie(res, this.configService);
+      throw error;
+    }
+  }
+
+  @Post('logout')
+  @UseGuards(CsrfOriginGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Log out current session',
+    description:
+      'Revokes the current session token family in PostgreSQL and clears the HttpOnly refresh token cookie.',
+  })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Logged out successfully',
+  })
+  @SwaggerApiResponse({
+    status: 403,
+    description: 'Untrusted request origin (CSRF defense)',
+  })
+  @ResponseMessage('Logged out successfully')
+  async logout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<Record<string, never>> {
+    const cookieName =
+      this.configService.get<string>('auth.refreshCookieName') ||
+      'andemta_refresh';
+    const rawRefreshToken = req.cookies?.[cookieName];
+
+    if (rawRefreshToken) {
+      try {
+        await this.authService.logout(rawRefreshToken);
+      } catch {
+        // Idempotent logout: proceed with clearing the cookie even if revocation encounters an error
+      }
+    }
+
+    clearRefreshCookie(res, this.configService);
+    return {};
+  }
+
+  @Post('logout-all')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Log out from all devices',
+    description:
+      'Revokes all active sessions across all devices for the authenticated user and clears the current device refresh cookie.',
+  })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'All sessions logged out successfully',
+  })
+  @SwaggerApiResponse({
+    status: 401,
+    description: 'Missing, invalid, or expired Bearer access token',
+  })
+  @ResponseMessage('All sessions logged out successfully')
+  async logoutAll(
+    @CurrentUser() user: AuthenticatedUser,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<Record<string, never>> {
+    await this.authService.logoutAll(user.id);
+    clearRefreshCookie(res, this.configService);
+    return {};
   }
 
   @Get('me')
@@ -155,6 +296,3 @@ export class AuthController {
     return user;
   }
 }
-
-
-
