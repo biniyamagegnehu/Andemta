@@ -30,6 +30,13 @@ export interface AppConfiguration {
     issuer: string;
     audience: string;
   };
+  auth: {
+    refreshTokenTtlDays: number;
+    refreshCookieName: string;
+    refreshCookiePath: string;
+    cookieSecure: boolean;
+    cookieSameSite: 'lax' | 'strict' | 'none';
+  };
 }
 
 export default (): AppConfiguration => ({
@@ -72,5 +79,22 @@ export default (): AppConfiguration => ({
     accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
     issuer: process.env.JWT_ISSUER || 'andemta-api',
     audience: process.env.JWT_AUDIENCE || 'andemta-client',
+  },
+  auth: {
+    refreshTokenTtlDays: parseInt(
+      process.env.AUTH_REFRESH_TOKEN_TTL_DAYS || '30',
+      10,
+    ),
+    refreshCookieName:
+      process.env.AUTH_REFRESH_COOKIE_NAME || 'andemta_refresh',
+    refreshCookiePath:
+      process.env.AUTH_REFRESH_COOKIE_PATH || '/api/v1/auth',
+    cookieSecure:
+      process.env.NODE_ENV === 'production'
+        ? true
+        : process.env.AUTH_COOKIE_SECURE === 'true',
+    cookieSameSite:
+      (process.env.AUTH_COOKIE_SAME_SITE as 'lax' | 'strict' | 'none') ||
+      'lax',
   },
 });

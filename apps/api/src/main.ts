@@ -2,6 +2,7 @@ import { NestFactory, Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
@@ -32,6 +33,9 @@ async function bootstrap() {
       crossOriginEmbedderPolicy: false,
     }),
   );
+
+  // 1b. Security: Cookie Parser Middleware for HttpOnly Refresh Tokens (Phase 3.5)
+  app.use(cookieParser());
 
   // 2. Security: CORS configuration
   app.enableCors({

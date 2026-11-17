@@ -43,4 +43,13 @@ export const environmentValidationSchema = Joi.object({
   JWT_ACCESS_EXPIRES_IN: Joi.string().default('15m'),
   JWT_ISSUER: Joi.string().default('andemta-api'),
   JWT_AUDIENCE: Joi.string().default('andemta-client'),
+
+  // Refresh Token and Session Cookie configuration (Phase 3.5)
+  AUTH_REFRESH_TOKEN_TTL_DAYS: Joi.number().integer().min(1).default(30),
+  AUTH_REFRESH_COOKIE_NAME: Joi.string().default('andemta_refresh'),
+  AUTH_REFRESH_COOKIE_PATH: Joi.string().default('/api/v1/auth'),
+  AUTH_COOKIE_SECURE: Joi.boolean().default(false),
+  AUTH_COOKIE_SAME_SITE: Joi.string()
+    .valid('lax', 'strict', 'none')
+    .default('lax'),
 });
