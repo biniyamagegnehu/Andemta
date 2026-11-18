@@ -5,6 +5,7 @@ import type { Transporter } from 'nodemailer';
 import {
   EmailProvider,
   SendVerificationEmailOptions,
+  SendPasswordResetEmailOptions,
 } from '../interfaces/email-provider.interface';
 
 @Injectable()
@@ -197,6 +198,173 @@ export class NodemailerEmailProvider implements EmailProvider {
     } catch (error) {
       this.logger.error(
         `Failed to send verification email to recipient: ${(error as Error).message}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Sends a password reset email containing a secure one-time reset link.
+   * Never logs raw tokens, complete reset URLs, or SMTP credentials.
+   *
+   * @param options Password reset email options (recipient, URL, expiration)
+   */
+  async sendPasswordResetEmail(
+    options: SendPasswordResetEmailOptions,
+  ): Promise<void> {
+    const { recipientEmail, resetUrl, expiresInMinutes } = options;
+
+    const subject = 'Reset your password — Andemta';
+
+    const textContent = [
+      'Andemta — Ethiopian Consumer Research Marketplace',
+      '',
+      'You requested to reset the password for your Andemta account.',
+      'Please visit the following link to set a new secure password:',
+      resetUrl,
+      '',
+      `This password reset link will expire in ${expiresInMinutes} minutes.`,
+      '',
+      'SECURITY NOTICE:',
+      '• Never share this link with anyone. Andemta will never ask for your reset link.',
+      '• If you did not request a password reset, you can safely ignore this email. Your password will remain unchanged.',
+    ].join('\n');
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #1a202c;
+      background-color: #f7fafc;
+      margin: 0;
+      padding: 24px;
+    }
+    .container {
+      max-width: 580px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      border: 1px solid #e2e8f0;
+    }
+    .header {
+      background-color: #0f172a;
+      padding: 24px 32px;
+      text-align: center;
+    }
+    .header h1 {
+      color: #ffffff;
+      font-size: 24px;
+      margin: 0;
+      letter-spacing: 0.5px;
+    }
+    .header p {
+      color: #94a3b8;
+      font-size: 13px;
+      margin: 4px 0 0;
+    }
+    .content {
+      padding: 32px;
+    }
+    .button-container {
+      text-align: center;
+      margin: 28px 0;
+    }
+    .button {
+      display: inline-block;
+      background-color: #0284c7;
+      color: #ffffff !important;
+      text-decoration: none;
+      padding: 12px 32px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 15px;
+    }
+    .security-notice {
+      background-color: #fffbeb;
+      border: 1px solid #fef3c7;
+      border-radius: 6px;
+      padding: 16px;
+      margin: 20px 0;
+      font-size: 13px;
+      color: #92400e;
+    }
+    .link-fallback {
+      background-color: #f8fafc;
+      padding: 12px;
+      border-radius: 4px;
+      word-break: break-all;
+      font-size: 12px;
+      color: #475569;
+      border: 1px solid #e2e8f0;
+      margin-top: 16px;
+    }
+    .footer {
+      border-top: 1px solid #e2e8f0;
+      padding: 20px 32px;
+      font-size: 12px;
+      color: #64748b;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Andemta</h1>
+      <p>Ethiopian Consumer Research Marketplace</p>
+    </div>
+    <div class="content">
+      <h2 style="font-size: 18px; margin-top: 0; color: #0f172a;">Password Reset Request</h2>
+      <p>We received a request to reset the password for your Andemta account. Click the button below to choose a new password.</p>
+      <div class="button-container">
+        <a href="${resetUrl}" class="button" target="_blank">Reset Password</a>
+      </div>
+      <div class="security-notice">
+        <strong>Security Notice:</strong>
+        <ul style="margin: 8px 0 0; padding-left: 20px;">
+          <li>This link will expire in <strong>${expiresInMinutes} minutes</strong>.</li>
+          <li>Never share this link with anyone. Our team will never ask for your reset link.</li>
+          <li>If you did not request this password reset, please safely ignore this email. Your account remains secure.</li>
+        </ul>
+      </div>
+      <div class="link-fallback">
+        If the button above does not work, copy and paste this link into your browser:<br>
+        <a href="${resetUrl}" style="color: #0284c7;">${resetUrl}</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p style="margin: 0;">If you did not request a password reset, you can safely ignore this email.</p>
+      <p style="margin: 4px 0 0;">&copy; ${new Date().getFullYear()} Andemta. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+    try {
+      const info = await this.transporter.sendMail({
+        from: this.senderFrom,
+        to: recipientEmail,
+        subject,
+        text: textContent,
+        html: htmlContent,
+      });
+
+      this.logger.log(
+        `Password reset email sent to recipient (messageId: ${info.messageId})`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send password reset email to recipient: ${(error as Error).message}`,
       );
       throw error;
     }
