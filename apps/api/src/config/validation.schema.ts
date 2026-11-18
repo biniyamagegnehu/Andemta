@@ -52,4 +52,13 @@ export const environmentValidationSchema = Joi.object({
   AUTH_COOKIE_SAME_SITE: Joi.string()
     .valid('lax', 'strict', 'none')
     .default('lax'),
+
+  // Password Reset configuration (Phase 3.7)
+  PASSWORD_RESET_TOKEN_TTL_MINUTES: Joi.number()
+    .integer()
+    .min(1)
+    .default(30),
+  FRONTEND_PASSWORD_RESET_URL: Joi.string()
+    .uri()
+    .default('http://localhost:3000/reset-password'),
 });

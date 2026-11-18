@@ -1,3 +1,27 @@
+import * as crypto from 'crypto';
+
+/**
+ * Generates at least 32 cryptographically secure random bytes encoded as base64url.
+ * High entropy (256 bits) prevents enumeration or predictability.
+ *
+ * @param byteLength Number of random bytes (default: 32)
+ * @returns Base64URL-encoded raw token
+ */
+export function generateRawToken(byteLength = 32): string {
+  return crypto.randomBytes(byteLength).toString('base64url');
+}
+
+/**
+ * Computes a SHA-256 hash of a raw token for secure database persistence.
+ * Raw tokens are never stored, logged, or exposed.
+ *
+ * @param rawToken The plaintext token string
+ * @returns 64-character lowercase hexadecimal SHA-256 hash
+ */
+export function hashToken(rawToken: string): string {
+  return crypto.createHash('sha256').update(rawToken).digest('hex');
+}
+
 /**
  * Converts a duration string (e.g. '15m', '1h', '2d', '900s', '900') or numeric seconds into seconds.
  * Defaults to 900 seconds (15 minutes) if unparseable.

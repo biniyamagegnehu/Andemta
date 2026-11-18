@@ -36,6 +36,8 @@ export interface AppConfiguration {
     refreshCookiePath: string;
     cookieSecure: boolean;
     cookieSameSite: 'lax' | 'strict' | 'none';
+    passwordResetTokenTtlMinutes: number;
+    passwordResetUrl: string;
   };
 }
 
@@ -96,5 +98,12 @@ export default (): AppConfiguration => ({
     cookieSameSite:
       (process.env.AUTH_COOKIE_SAME_SITE as 'lax' | 'strict' | 'none') ||
       'lax',
+    passwordResetTokenTtlMinutes: parseInt(
+      process.env.PASSWORD_RESET_TOKEN_TTL_MINUTES || '30',
+      10,
+    ),
+    passwordResetUrl:
+      process.env.FRONTEND_PASSWORD_RESET_URL ||
+      'http://localhost:3000/reset-password',
   },
 });
