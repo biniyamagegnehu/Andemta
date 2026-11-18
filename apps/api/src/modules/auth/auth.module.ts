@@ -6,6 +6,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { PasswordHashingService } from './services/password-hashing.service';
 import { EmailVerificationService } from './services/email-verification.service';
+import { PasswordResetService } from './services/password-reset.service';
 import { SessionService } from './services/session.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -44,6 +45,7 @@ import { EmailModule } from '../email/email.module';
     AuthService,
     PasswordHashingService,
     EmailVerificationService,
+    PasswordResetService,
     SessionService,
     JwtStrategy,
     JwtAuthGuard,
@@ -53,6 +55,7 @@ import { EmailModule } from '../email/email.module';
     AuthService,
     PasswordHashingService,
     EmailVerificationService,
+    PasswordResetService,
     SessionService,
     JwtAuthGuard,
     CsrfOriginGuard,

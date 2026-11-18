@@ -20,10 +20,13 @@ import { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { EmailVerificationService } from './services/email-verification.service';
+import { PasswordResetService } from './services/password-reset.service';
 import { RegisterDto } from './dto/register.dto';
 import { RegisterResponseDto } from './dto/register-response.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { LoginResponseDto, LoginUserDto } from './dto/login-response.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -39,6 +42,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly emailVerificationService: EmailVerificationService,
+    private readonly passwordResetService: PasswordResetService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -109,6 +113,56 @@ export class AuthController {
   )
   async resendVerification(@Body() dto: ResendVerificationDto) {
     return this.emailVerificationService.resendVerification(dto.email);
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Request password reset instructions',
+    description:
+      'Issues a secure one-time password reset token and dispatches an email if an account with the specified email exists. Always returns the same generic response to prevent account enumeration.',
+  })
+  @SwaggerApiResponse({
+    status: 200,
+    description:
+      'If an account exists for this email address, password reset instructions will be sent.',
+  })
+  @SwaggerApiResponse({
+    status: 400,
+    description: 'Validation failed (e.g. invalid email address format)',
+  })
+  @ResponseMessage(
+    'If an account exists for this email address, password reset instructions will be sent.',
+  )
+  async forgotPassword(
+    @Body() dto: ForgotPasswordDto,
+  ): Promise<Record<string, never>> {
+    await this.passwordResetService.forgotPassword(dto.email);
+    return {};
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Reset account password using one-time token',
+    description:
+      'Validates the one-time reset token, updates the account password with a fresh Argon2id hash, invalidates all outstanding reset tokens, and revokes all active authentication sessions across devices.',
+  })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Password has been reset successfully',
+  })
+  @SwaggerApiResponse({
+    status: 400,
+    description:
+      'Invalid, expired, or already-used reset token, or password does not meet complexity requirements',
+  })
+  @ResponseMessage('Password has been reset successfully')
+  async resetPassword(
+    @Body() dto: ResetPasswordDto,
+  ): Promise<Record<string, never>> {
+    await this.passwordResetService.resetPassword(dto.token, dto.newPassword);
+    return {};
   }
 
   @Post('login')

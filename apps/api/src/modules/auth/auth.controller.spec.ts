@@ -4,10 +4,13 @@ import { ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { EmailVerificationService } from './services/email-verification.service';
+import { PasswordResetService } from './services/password-reset.service';
 import { RegisterDto } from './dto/register.dto';
 import { RegisterResponseDto } from './dto/register-response.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
 import { AuthenticatedUser } from './interfaces/authenticated-user.interface';
@@ -24,6 +27,10 @@ describe('AuthController', () => {
   let emailVerificationMock: {
     verifyEmail: jest.Mock;
     resendVerification: jest.Mock;
+  };
+  let passwordResetMock: {
+    forgotPassword: jest.Mock;
+    resetPassword: jest.Mock;
   };
   let configServiceMock: {
     get: jest.Mock;
@@ -55,6 +62,11 @@ describe('AuthController', () => {
       resendVerification: jest.fn(),
     };
 
+    passwordResetMock = {
+      forgotPassword: jest.fn(),
+      resetPassword: jest.fn(),
+    };
+
     configServiceMock = {
       get: jest.fn((key: string) => {
         if (key === 'auth.refreshCookieName') return 'andemta_refresh';
@@ -71,6 +83,7 @@ describe('AuthController', () => {
       providers: [
         { provide: AuthService, useValue: authServiceMock },
         { provide: EmailVerificationService, useValue: emailVerificationMock },
+        { provide: PasswordResetService, useValue: passwordResetMock },
         { provide: ConfigService, useValue: configServiceMock },
       ],
     }).compile();
@@ -311,6 +324,36 @@ describe('AuthController', () => {
       const result = await controller.getProfile(user);
 
       expect(result).toEqual(user);
+    });
+  });
+
+  describe('forgotPassword', () => {
+    it('should call passwordResetService.forgotPassword and return empty object for envelope wrapping', async () => {
+      const dto: ForgotPasswordDto = { email: 'researcher@andemta.et' };
+      passwordResetMock.forgotPassword.mockResolvedValueOnce(undefined);
+
+      const result = await controller.forgotPassword(dto);
+
+      expect(passwordResetMock.forgotPassword).toHaveBeenCalledWith(dto.email);
+      expect(result).toEqual({});
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('should call passwordResetService.resetPassword and return empty object for envelope wrapping', async () => {
+      const dto: ResetPasswordDto = {
+        token: 'sample-raw-reset-token',
+        newPassword: 'NewSecurePassword123!',
+      };
+      passwordResetMock.resetPassword.mockResolvedValueOnce(undefined);
+
+      const result = await controller.resetPassword(dto);
+
+      expect(passwordResetMock.resetPassword).toHaveBeenCalledWith(
+        dto.token,
+        dto.newPassword,
+      );
+      expect(result).toEqual({});
     });
   });
 });
