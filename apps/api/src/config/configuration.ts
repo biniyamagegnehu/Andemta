@@ -39,6 +39,14 @@ export interface AppConfiguration {
     passwordResetTokenTtlMinutes: number;
     passwordResetUrl: string;
   };
+  googleOAuth: {
+    clientId?: string;
+    clientSecret?: string;
+    callbackUrl: string;
+    frontendSuccessUrl: string;
+    frontendFailureUrl: string;
+    stateTtlSeconds: number;
+  };
 }
 
 export default (): AppConfiguration => ({
@@ -105,5 +113,22 @@ export default (): AppConfiguration => ({
     passwordResetUrl:
       process.env.FRONTEND_PASSWORD_RESET_URL ||
       'http://localhost:3000/reset-password',
+  },
+  googleOAuth: {
+    clientId: process.env.GOOGLE_CLIENT_ID || undefined,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || undefined,
+    callbackUrl:
+      process.env.GOOGLE_CALLBACK_URL ||
+      'http://localhost:4000/api/v1/auth/google/callback',
+    frontendSuccessUrl:
+      process.env.FRONTEND_GOOGLE_AUTH_SUCCESS_URL ||
+      'http://localhost:3000/auth/google/callback',
+    frontendFailureUrl:
+      process.env.FRONTEND_GOOGLE_AUTH_FAILURE_URL ||
+      'http://localhost:3000/login',
+    stateTtlSeconds: parseInt(
+      process.env.GOOGLE_OAUTH_STATE_TTL_SECONDS || '300',
+      10,
+    ),
   },
 });

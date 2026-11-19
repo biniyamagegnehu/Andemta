@@ -61,4 +61,21 @@ export const environmentValidationSchema = Joi.object({
   FRONTEND_PASSWORD_RESET_URL: Joi.string()
     .uri()
     .default('http://localhost:3000/reset-password'),
+
+  // Google OAuth 2.0 configuration (Phase 3.8)
+  GOOGLE_CLIENT_ID: Joi.string().optional().allow('').default(''),
+  GOOGLE_CLIENT_SECRET: Joi.string().optional().allow('').default(''),
+  GOOGLE_CALLBACK_URL: Joi.string()
+    .uri()
+    .default('http://localhost:4000/api/v1/auth/google/callback'),
+  FRONTEND_GOOGLE_AUTH_SUCCESS_URL: Joi.string()
+    .uri()
+    .default('http://localhost:3000/auth/google/callback'),
+  FRONTEND_GOOGLE_AUTH_FAILURE_URL: Joi.string()
+    .uri()
+    .default('http://localhost:3000/login'),
+  GOOGLE_OAUTH_STATE_TTL_SECONDS: Joi.number()
+    .integer()
+    .min(30)
+    .default(300),
 });
