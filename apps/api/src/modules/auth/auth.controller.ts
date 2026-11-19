@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Body,
+  Query,
   HttpCode,
   HttpStatus,
   UseGuards,
@@ -21,6 +22,7 @@ import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { EmailVerificationService } from './services/email-verification.service';
 import { PasswordResetService } from './services/password-reset.service';
+import { GoogleOAuthService } from './services/google-oauth.service';
 import { RegisterDto } from './dto/register.dto';
 import { RegisterResponseDto } from './dto/register-response.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
@@ -43,6 +45,7 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly emailVerificationService: EmailVerificationService,
     private readonly passwordResetService: PasswordResetService,
+    private readonly googleOAuthService: GoogleOAuthService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -163,6 +166,101 @@ export class AuthController {
   ): Promise<Record<string, never>> {
     await this.passwordResetService.resetPassword(dto.token, dto.newPassword);
     return {};
+  }
+
+  @Get('google')
+  @ApiOperation({
+    summary: 'Initiate Google OAuth 2.0 login / registration',
+    description:
+      'Generates a cryptographically secure authorization URL with PKCE S256 and OIDC nonce, stores transaction state in Redis, and redirects the browser to Google accounts sign-in.',
+  })
+  @SwaggerApiResponse({
+    status: 302,
+    description: 'Redirect to Google OAuth authorization endpoint',
+  })
+  @SwaggerApiResponse({
+    status: 503,
+    description: 'Google OAuth is not configured on this server',
+  })
+  async googleLogin(@Res() res: Response): Promise<void> {
+    const authUrl = await this.googleOAuthService.generateAuthUrl('login');
+    res.redirect(authUrl);
+  }
+
+  @Get('google/link')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Initiate Google account linking for authenticated user',
+    description:
+      'Initiates Google OAuth flow to link an external Google identity to the currently authenticated user account.',
+  })
+  @SwaggerApiResponse({
+    status: 302,
+    description:
+      'Redirect to Google OAuth authorization endpoint with link transaction bound to user',
+  })
+  @SwaggerApiResponse({
+    status: 401,
+    description: 'Unauthorized — requires valid Bearer access token',
+  })
+  @SwaggerApiResponse({
+    status: 503,
+    description: 'Google OAuth is not configured on this server',
+  })
+  async googleLink(
+    @CurrentUser() user: AuthenticatedUser,
+    @Res() res: Response,
+  ): Promise<void> {
+    const authUrl = await this.googleOAuthService.generateAuthUrl(
+      'link',
+      user.id,
+    );
+    res.redirect(authUrl);
+  }
+
+  @Get('google/callback')
+  @ApiOperation({
+    summary: 'Handle Google OAuth 2.0 authorization callback',
+    description:
+      'Validates callback state, exchanges code for tokens using PKCE verifier, verifies Google ID token, authenticates or links user, sets HttpOnly refresh cookie, and redirects to frontend destination.',
+  })
+  @SwaggerApiResponse({
+    status: 302,
+    description: 'Redirect to frontend success or failure destination',
+  })
+  async googleCallback(
+    @Query('code') code: string | undefined,
+    @Query('state') state: string | undefined,
+    @Query('error') error: string | undefined,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    if (error) {
+      res.redirect(this.googleOAuthService.buildFailureUrl(error));
+      return;
+    }
+
+    if (!code || !state) {
+      res.redirect(this.googleOAuthService.buildFailureUrl('invalid_request'));
+      return;
+    }
+
+    const userAgent = req.headers['user-agent'];
+    const ipAddress = req.ip;
+
+    const result = await this.googleOAuthService.handleCallback(
+      code,
+      state,
+      userAgent,
+      ipAddress,
+    );
+
+    if (result.success && result.rawRefreshToken) {
+      setRefreshCookie(res, result.rawRefreshToken, this.configService);
+    }
+
+    res.redirect(result.redirectUrl);
   }
 
   @Post('login')

@@ -5,6 +5,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { EmailVerificationService } from './services/email-verification.service';
 import { PasswordResetService } from './services/password-reset.service';
+import { GoogleOAuthService } from './services/google-oauth.service';
 import { RegisterDto } from './dto/register.dto';
 import { RegisterResponseDto } from './dto/register-response.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
@@ -32,6 +33,11 @@ describe('AuthController', () => {
     forgotPassword: jest.Mock;
     resetPassword: jest.Mock;
   };
+  let googleOAuthMock: {
+    generateAuthUrl: jest.Mock;
+    handleCallback: jest.Mock;
+    buildFailureUrl: jest.Mock;
+  };
   let configServiceMock: {
     get: jest.Mock;
   };
@@ -46,6 +52,7 @@ describe('AuthController', () => {
   const makeMockResponse = () => ({
     cookie: jest.fn(),
     clearCookie: jest.fn(),
+    redirect: jest.fn(),
   });
 
   beforeEach(async () => {
@@ -67,6 +74,14 @@ describe('AuthController', () => {
       resetPassword: jest.fn(),
     };
 
+    googleOAuthMock = {
+      generateAuthUrl: jest.fn(),
+      handleCallback: jest.fn(),
+      buildFailureUrl: jest.fn(
+        (code: string) => `http://localhost:3000/login?error=${code}`,
+      ),
+    };
+
     configServiceMock = {
       get: jest.fn((key: string) => {
         if (key === 'auth.refreshCookieName') return 'andemta_refresh';
@@ -84,6 +99,7 @@ describe('AuthController', () => {
         { provide: AuthService, useValue: authServiceMock },
         { provide: EmailVerificationService, useValue: emailVerificationMock },
         { provide: PasswordResetService, useValue: passwordResetMock },
+        { provide: GoogleOAuthService, useValue: googleOAuthMock },
         { provide: ConfigService, useValue: configServiceMock },
       ],
     }).compile();
@@ -354,6 +370,135 @@ describe('AuthController', () => {
         dto.newPassword,
       );
       expect(result).toEqual({});
+    });
+  });
+
+  describe('googleLogin', () => {
+    it('should generate auth url with login action and redirect response', async () => {
+      const mockAuthUrl = 'https://accounts.google.com/o/oauth2/v2/auth?client_id=123';
+      googleOAuthMock.generateAuthUrl.mockResolvedValueOnce(mockAuthUrl);
+
+      const res = makeMockResponse();
+      await controller.googleLogin(res as never);
+
+      expect(googleOAuthMock.generateAuthUrl).toHaveBeenCalledWith('login');
+      expect(res.redirect).toHaveBeenCalledWith(mockAuthUrl);
+    });
+  });
+
+  describe('googleLink', () => {
+    it('should generate auth url with link action and user id, and redirect', async () => {
+      const mockAuthUrl = 'https://accounts.google.com/o/oauth2/v2/auth?state=link-state';
+      googleOAuthMock.generateAuthUrl.mockResolvedValueOnce(mockAuthUrl);
+
+      const user: AuthenticatedUser = {
+        id: 'user-uuid-1',
+        email: 'user@andemta.et',
+        emailVerifiedAt: new Date(),
+      };
+      const res = makeMockResponse();
+      await controller.googleLink(user, res as never);
+
+      expect(googleOAuthMock.generateAuthUrl).toHaveBeenCalledWith('link', 'user-uuid-1');
+      expect(res.redirect).toHaveBeenCalledWith(mockAuthUrl);
+    });
+  });
+
+  describe('googleCallback', () => {
+    it('should redirect to failure url if error query parameter is present', async () => {
+      const res = makeMockResponse();
+      const req = makeMockRequest();
+
+      await controller.googleCallback(
+        undefined,
+        undefined,
+        'access_denied',
+        req as never,
+        res as never,
+      );
+
+      expect(googleOAuthMock.buildFailureUrl).toHaveBeenCalledWith('access_denied');
+      expect(res.redirect).toHaveBeenCalledWith(
+        'http://localhost:3000/login?error=access_denied',
+      );
+    });
+
+    it('should redirect to failure url with invalid_request if code or state is missing', async () => {
+      const res = makeMockResponse();
+      const req = makeMockRequest();
+
+      await controller.googleCallback(
+        undefined,
+        'valid-state',
+        undefined,
+        req as never,
+        res as never,
+      );
+
+      expect(googleOAuthMock.buildFailureUrl).toHaveBeenCalledWith('invalid_request');
+      expect(res.redirect).toHaveBeenCalledWith(
+        'http://localhost:3000/login?error=invalid_request',
+      );
+    });
+
+    it('should set refresh cookie and redirect to success url on successful login', async () => {
+      const res = makeMockResponse();
+      const req = makeMockRequest({
+        headers: { 'user-agent': 'chrome' },
+        ip: '192.168.1.1',
+      });
+
+      googleOAuthMock.handleCallback.mockResolvedValueOnce({
+        success: true,
+        redirectUrl: 'http://localhost:3000/auth/google/callback',
+        rawRefreshToken: 'new-raw-refresh-token',
+      });
+
+      await controller.googleCallback(
+        'valid-code',
+        'valid-state',
+        undefined,
+        req as never,
+        res as never,
+      );
+
+      expect(googleOAuthMock.handleCallback).toHaveBeenCalledWith(
+        'valid-code',
+        'valid-state',
+        'chrome',
+        '192.168.1.1',
+      );
+      expect(res.cookie).toHaveBeenCalledWith(
+        'andemta_refresh',
+        'new-raw-refresh-token',
+        expect.objectContaining({ httpOnly: true }),
+      );
+      expect(res.redirect).toHaveBeenCalledWith(
+        'http://localhost:3000/auth/google/callback',
+      );
+    });
+
+    it('should redirect without setting cookie on account linking', async () => {
+      const res = makeMockResponse();
+      const req = makeMockRequest();
+
+      googleOAuthMock.handleCallback.mockResolvedValueOnce({
+        success: true,
+        redirectUrl: 'http://localhost:3000/auth/google/callback?linked=true',
+      });
+
+      await controller.googleCallback(
+        'valid-code',
+        'valid-state',
+        undefined,
+        req as never,
+        res as never,
+      );
+
+      expect(res.cookie).not.toHaveBeenCalled();
+      expect(res.redirect).toHaveBeenCalledWith(
+        'http://localhost:3000/auth/google/callback?linked=true',
+      );
     });
   });
 });
