@@ -5,6 +5,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { IsNotCommonPassword } from '../validators/is-not-common-password.validator';
 
 export class ResetPasswordDto {
   @ApiProperty({
@@ -27,5 +28,6 @@ export class ResetPasswordDto {
   @IsString({ message: 'newPassword must be a string' })
   @MinLength(12, { message: 'newPassword must be at least 12 characters long' })
   @MaxLength(128, { message: 'newPassword must be at most 128 characters long' })
+  @IsNotCommonPassword()
   newPassword!: string;
 }

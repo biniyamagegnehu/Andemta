@@ -7,6 +7,7 @@ import {
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+import { IsNotCommonPassword } from '../validators/is-not-common-password.validator';
 
 export class RegisterDto {
   @ApiProperty({
@@ -34,6 +35,7 @@ export class RegisterDto {
   @IsString({ message: 'password must be a string' })
   @MinLength(12, { message: 'password must be at least 12 characters long' })
   @MaxLength(128, { message: 'password must be at most 128 characters long' })
+  @IsNotCommonPassword()
   password!: string;
 }
 
