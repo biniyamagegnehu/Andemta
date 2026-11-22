@@ -58,6 +58,53 @@ export interface LoginResponseData {
 }
 
 /**
+ * Registration request payload for POST /api/v1/auth/register.
+ */
+export interface RegisterDto {
+  email: string;
+  password: string;
+}
+
+/**
+ * Registration response payload returned by POST /api/v1/auth/register.
+ */
+export interface RegisterResponseData {
+  id: string;
+  email: string;
+  emailVerifiedAt: string | null;
+  createdAt: string;
+}
+
+/**
+ * Email verification request payload for POST /api/v1/auth/verify-email.
+ */
+export interface VerifyEmailDto {
+  token: string;
+}
+
+/**
+ * Email verification response payload returned by POST /api/v1/auth/verify-email.
+ */
+export interface VerifyEmailResponseData {
+  email: string;
+  emailVerifiedAt: string;
+}
+
+/**
+ * Resend verification request payload for POST /api/v1/auth/resend-verification.
+ */
+export interface ResendVerificationDto {
+  email: string;
+}
+
+/**
+ * Resend verification response payload returned by POST /api/v1/auth/resend-verification.
+ */
+export interface ResendVerificationResponseData {
+  message: string;
+}
+
+/**
  * Request options for API client invocations.
  */
 export interface RequestOptions extends Omit<RequestInit, 'body'> {

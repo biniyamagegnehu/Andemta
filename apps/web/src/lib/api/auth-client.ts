@@ -4,7 +4,11 @@ import {
   ApiError,
   type AuthUser,
   type LoginResponseData,
+  type RegisterDto,
+  type RegisterResponseData,
   type RequestOptions,
+  type ResendVerificationResponseData,
+  type VerifyEmailResponseData,
 } from './types';
 
 /**
@@ -129,6 +133,46 @@ export const authClient = {
    */
   refreshSession(): Promise<LoginResponseData | null> {
     return refreshAccessToken();
+  },
+
+  /**
+   * Registers a new user account with email and password.
+   * Does not store an access token or log the user in automatically.
+   */
+  register(dto: RegisterDto): Promise<RegisterResponseData> {
+    return apiClient.post<RegisterResponseData>('/auth/register', dto, {
+      skipAuth: true,
+      skipRefreshRetry: true,
+    });
+  },
+
+  /**
+   * Consumes an email verification token to verify the user account.
+   */
+  verifyEmail(token: string): Promise<VerifyEmailResponseData> {
+    return apiClient.post<VerifyEmailResponseData>(
+      '/auth/verify-email',
+      { token },
+      {
+        skipAuth: true,
+        skipRefreshRetry: true,
+      },
+    );
+  },
+
+  /**
+   * Requests a new email verification token.
+   * Always returns generic response behavior to avoid account enumeration.
+   */
+  resendVerification(email: string): Promise<ResendVerificationResponseData> {
+    return apiClient.post<ResendVerificationResponseData>(
+      '/auth/resend-verification',
+      { email },
+      {
+        skipAuth: true,
+        skipRefreshRetry: true,
+      },
+    );
   },
 
   /**
