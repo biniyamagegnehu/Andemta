@@ -1,0 +1,91 @@
+/**
+ * Standard backend pagination metadata interface.
+ */
+export interface ApiPaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+/**
+ * Standard backend successful API response envelope.
+ */
+export interface ApiResponse<T = unknown> {
+  success: true;
+  message: string;
+  data: T;
+  meta: ApiPaginationMeta | null;
+}
+
+/**
+ * Individual field-level error detail structure.
+ */
+export interface ApiErrorDetail {
+  field?: string;
+  message: string;
+}
+
+/**
+ * Standard backend error API response envelope.
+ */
+export interface ApiErrorResponse {
+  success: false;
+  message: string;
+  data: null;
+  errors: ApiErrorDetail[];
+}
+
+/**
+ * Safe authenticated user profile representation returned by GET /api/v1/auth/me.
+ * Never includes sensitive backend fields such as passwordHash, token secrets, or session internals.
+ */
+export interface AuthUser {
+  id: string;
+  email: string;
+  emailVerifiedAt: string | null;
+  createdAt?: string;
+}
+
+/**
+ * Payload returned upon successful login or token refresh from POST /api/v1/auth/refresh and /login.
+ */
+export interface LoginResponseData {
+  accessToken: string;
+  tokenType: string;
+  expiresIn: number;
+  user: AuthUser;
+}
+
+/**
+ * Request options for API client invocations.
+ */
+export interface RequestOptions extends Omit<RequestInit, 'body'> {
+  params?: Record<string, string | number | boolean | undefined | null>;
+  body?: unknown;
+  skipAuth?: boolean;
+  skipRefreshRetry?: boolean;
+}
+
+/**
+ * Typed client error representation for API communication failures.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly errors: ApiErrorDetail[];
+  readonly isNetworkError: boolean;
+
+  constructor(
+    message: string,
+    status = 500,
+    errors: ApiErrorDetail[] = [],
+    isNetworkError = false,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.errors = errors;
+    this.isNetworkError = isNetworkError;
+    Object.setPrototypeOf(this, ApiError.prototype);
+  }
+}
