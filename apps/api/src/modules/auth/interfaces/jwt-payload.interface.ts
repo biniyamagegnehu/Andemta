@@ -6,6 +6,7 @@ export interface JwtPayload {
   jti: string;
   iss: string;
   aud: string;
+  tokenVersion?: number;
   iat?: number;
   exp?: number;
 }
