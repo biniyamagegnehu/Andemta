@@ -68,8 +68,19 @@ export class CsrfOriginGuard implements CanActivate {
     }
 
     // 3. Neither Origin nor Referer is present.
-    // Allow non-browser / server-to-server / automated test requests.
-    return true;
+    // In test environment, allow headerless automated test runners.
+    // In all other environments (production, staging, development), reject missing Origin/Referer
+    // to prevent CSRF bypasses on cookie-authenticated endpoints.
+    if (this.configService.get<string>('nodeEnv') === 'test') {
+      return true;
+    }
+
+    this.logger.warn(
+      `Rejected request missing both Origin and Referer headers on ${request.method} ${request.url}`,
+    );
+    throw new ForbiddenException(
+      'Untrusted request origin: missing Origin or Referer header',
+    );
   }
 
   private normalizeOrigin(url: string): string {

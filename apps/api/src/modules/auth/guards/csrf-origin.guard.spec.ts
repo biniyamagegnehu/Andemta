@@ -87,10 +87,28 @@ describe('CsrfOriginGuard', () => {
     );
   });
 
-  it('should allow requests when neither Origin nor Referer is present (e.g. non-browser API clients)', () => {
-    const context = createMockContext({});
+  it('should allow requests when neither Origin nor Referer is present in test environment', () => {
+    mockConfigService.get.mockImplementation((key: string) => {
+      if (key === 'nodeEnv') return 'test';
+      return undefined;
+    });
 
+    const context = createMockContext({});
     expect(guard.canActivate(context)).toBe(true);
+  });
+
+  it('should reject requests when neither Origin nor Referer is present in non-test environment', () => {
+    mockConfigService.get.mockImplementation((key: string) => {
+      if (key === 'nodeEnv') return 'production';
+      return undefined;
+    });
+
+    const context = createMockContext({});
+    expect(() => guard.canActivate(context)).toThrow(
+      new ForbiddenException(
+        'Untrusted request origin: missing Origin or Referer header',
+      ),
+    );
   });
 
   it('should strictly only allow production frontendUrl in production environment', () => {

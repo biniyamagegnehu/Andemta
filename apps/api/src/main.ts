@@ -1,4 +1,5 @@
 import { NestFactory, Reflector } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
 import helmet from 'helmet';
@@ -11,7 +12,9 @@ import { createGlobalValidationPipe } from './common/pipes/validation.pipe';
 import { API_PREFIX, SWAGGER_DOCS_PATH } from './common/constants';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bufferLogs: true,
+  });
 
   // Attach structured Pino logger
   const logger = app.get(Logger);
@@ -23,23 +26,49 @@ async function bootstrap() {
   const port = configService.get<number>('port') || 4000;
   const frontendUrl =
     configService.get<string>('frontendUrl') || 'http://localhost:3000';
+  const swaggerEnabled = Boolean(configService.get<boolean>('swagger.enabled'));
+  const trustProxy = configService.get<string | boolean>('trustProxy', false);
 
-  // 1. Security: Helmet HTTP Headers
+  // Configure reverse proxy IP trust deliberately to prevent IP header spoofing
+  if (trustProxy && trustProxy !== 'false') {
+    app.set('trust proxy', trustProxy === 'true' ? true : trustProxy);
+  }
+
+  // 1. Security: Helmet HTTP Headers with deliberate production Content Security Policy
   app.use(
     helmet({
       contentSecurityPolicy: isProduction
-        ? undefined
+        ? swaggerEnabled
+          ? undefined // Allows Swagger UI when explicitly enabled in production
+          : {
+              directives: {
+                defaultSrc: ["'none'"],
+                frameAncestors: ["'none'"],
+                baseUri: ["'none'"],
+              },
+            }
         : false, // Allows inline scripts/styles for Swagger in development
-      crossOriginEmbedderPolicy: false,
+      crossOriginEmbedderPolicy: isProduction ? true : false,
+      hsts: isProduction
+        ? {
+            maxAge: 31536000,
+            includeSubDomains: true,
+            preload: true,
+          }
+        : false,
     }),
   );
 
   // 1b. Security: Cookie Parser Middleware for HttpOnly Refresh Tokens (Phase 3.5)
   app.use(cookieParser());
 
-  // 2. Security: CORS configuration
+  // 2. Security: CORS configuration (restrict localhost origins to development / test only)
+  const allowedOrigins = isProduction
+    ? [frontendUrl]
+    : [frontendUrl, 'http://localhost:3000', 'http://127.0.0.1:3000'];
+
   app.enableCors({
-    origin: [frontendUrl, 'http://localhost:3000', 'http://127.0.0.1:3000'],
+    origin: allowedOrigins,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
       'Content-Type',
@@ -67,8 +96,7 @@ async function bootstrap() {
   // 7. Lifecycle: Graceful shutdown hooks
   app.enableShutdownHooks();
 
-  // 8. Swagger / OpenAPI Documentation
-  const swaggerEnabled = configService.get<boolean>('swagger.enabled');
+  // 8. Swagger / OpenAPI Documentation (disabled by default in production)
   if (swaggerEnabled) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('Andemta API')
