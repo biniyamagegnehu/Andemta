@@ -37,6 +37,7 @@ import { CurrentUser } from './decorators/current-user.decorator';
 import { AuthenticatedUser } from './interfaces/authenticated-user.interface';
 import { ResponseMessage } from '../../common/decorators/response-message.decorator';
 import { setRefreshCookie, clearRefreshCookie } from './utils/cookie.utils';
+import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -49,6 +50,7 @@ export class AuthController {
     private readonly configService: ConfigService,
   ) {}
 
+  @Throttle({ default: { limit: 5, ttl: 3600000 } })
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -75,6 +77,7 @@ export class AuthController {
     return this.authService.register(dto);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 900000 } })
   @Post('verify-email')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -95,6 +98,7 @@ export class AuthController {
     return this.emailVerificationService.verifyEmail(dto.token);
   }
 
+  @Throttle({ default: { limit: 5, ttl: 3600000 } })
   @Post('resend-verification')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -118,6 +122,7 @@ export class AuthController {
     return this.emailVerificationService.resendVerification(dto.email);
   }
 
+  @Throttle({ default: { limit: 5, ttl: 3600000 } })
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -144,6 +149,7 @@ export class AuthController {
     return {};
   }
 
+  @Throttle({ default: { limit: 10, ttl: 3600000 } })
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -168,6 +174,7 @@ export class AuthController {
     return {};
   }
 
+  @Throttle({ default: { limit: 20, ttl: 900000 } })
   @Get('google')
   @ApiOperation({
     summary: 'Initiate Google OAuth 2.0 login / registration',
@@ -187,6 +194,7 @@ export class AuthController {
     res.redirect(authUrl);
   }
 
+  @Throttle({ default: { limit: 20, ttl: 900000 } })
   @Get('google/link')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -219,6 +227,7 @@ export class AuthController {
     res.redirect(authUrl);
   }
 
+  @Throttle({ default: { limit: 20, ttl: 900000 } })
   @Get('google/callback')
   @ApiOperation({
     summary: 'Handle Google OAuth 2.0 authorization callback',
@@ -263,6 +272,7 @@ export class AuthController {
     res.redirect(result.redirectUrl);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 900000 } })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -302,6 +312,7 @@ export class AuthController {
     return loginResponse;
   }
 
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @Post('refresh')
   @UseGuards(CsrfOriginGuard)
   @HttpCode(HttpStatus.OK)
