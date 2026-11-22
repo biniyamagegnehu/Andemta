@@ -8,6 +8,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { PasswordHashingService } from './services/password-hashing.service';
 import { EmailVerificationService } from './services/email-verification.service';
 import { SessionService } from './services/session.service';
+import { AccountLockoutService } from './services/account-lockout.service';
 import { DUMMY_ARGON2_HASH } from './constants/auth.constants';
 
 describe('AuthService', () => {
@@ -16,6 +17,7 @@ describe('AuthService', () => {
     user: {
       findUnique: jest.Mock;
       create: jest.Mock;
+      update: jest.Mock;
     };
     session?: {
       create: jest.Mock;
@@ -40,12 +42,18 @@ describe('AuthService', () => {
     revokeSession: jest.Mock;
     revokeAllUserSessions: jest.Mock;
   };
+  let accountLockoutMock: {
+    checkLockout: jest.Mock;
+    recordFailedAttempt: jest.Mock;
+    resetLockout: jest.Mock;
+  };
 
   beforeEach(async () => {
     prismaMock = {
       user: {
         findUnique: jest.fn(),
         create: jest.fn(),
+        update: jest.fn().mockResolvedValue({}),
       },
     };
 
@@ -75,6 +83,12 @@ describe('AuthService', () => {
       revokeAllUserSessions: jest.fn(),
     };
 
+    accountLockoutMock = {
+      checkLockout: jest.fn().mockResolvedValue(undefined),
+      recordFailedAttempt: jest.fn().mockResolvedValue(undefined),
+      resetLockout: jest.fn().mockResolvedValue(undefined),
+    };
+
     configServiceMock = {
       get: jest.fn((key: string) => {
         if (key === 'jwt.accessSecret')
@@ -95,6 +109,7 @@ describe('AuthService', () => {
         { provide: JwtService, useValue: jwtServiceMock },
         { provide: ConfigService, useValue: configServiceMock },
         { provide: SessionService, useValue: sessionServiceMock },
+        { provide: AccountLockoutService, useValue: accountLockoutMock },
       ],
     }).compile();
 
@@ -268,6 +283,7 @@ describe('AuthService', () => {
           id: true,
           email: true,
           passwordHash: true,
+          tokenVersion: true,
           emailVerifiedAt: true,
         },
       });
@@ -431,8 +447,12 @@ describe('AuthService', () => {
   });
 
   describe('logoutAll', () => {
-    it('should delegate all-sessions revocation to SessionService', async () => {
+    it('should delegate all-sessions revocation to SessionService and increment tokenVersion', async () => {
       await service.logoutAll('user-123');
+      expect(prismaMock.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-123' },
+        data: { tokenVersion: { increment: 1 } },
+      });
       expect(sessionServiceMock.revokeAllUserSessions).toHaveBeenCalledWith(
         'user-123',
       );

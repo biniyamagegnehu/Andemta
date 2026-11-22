@@ -4,6 +4,7 @@ import { JobsService } from './jobs.service';
 import {
   INFRASTRUCTURE_PING_QUEUE,
   INFRASTRUCTURE_PING_JOB,
+  AUTH_CLEANUP_QUEUE,
 } from './constants/job.constants';
 
 describe('JobsService', () => {
@@ -34,6 +35,10 @@ describe('JobsService', () => {
         JobsService,
         {
           provide: getQueueToken(INFRASTRUCTURE_PING_QUEUE),
+          useValue: queueMock,
+        },
+        {
+          provide: getQueueToken(AUTH_CLEANUP_QUEUE),
           useValue: queueMock,
         },
       ],

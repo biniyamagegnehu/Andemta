@@ -4,8 +4,12 @@ import { Queue, Job } from 'bullmq';
 import {
   INFRASTRUCTURE_PING_QUEUE,
   INFRASTRUCTURE_PING_JOB,
+  AUTH_CLEANUP_QUEUE,
+  AUTH_CLEANUP_JOB,
 } from './constants/job.constants';
 import { PingJobData, PingJobResult } from './processors/infrastructure-ping.processor';
+import { AuthCleanupJobData } from './processors/auth-cleanup.processor';
+import { CleanupResult } from '../modules/auth/services/auth-cleanup.service';
 
 export interface QueueMetrics {
   waiting: number;
@@ -22,6 +26,8 @@ export class JobsService {
   constructor(
     @InjectQueue(INFRASTRUCTURE_PING_QUEUE)
     private readonly pingQueue: Queue<PingJobData, PingJobResult>,
+    @InjectQueue(AUTH_CLEANUP_QUEUE)
+    private readonly cleanupQueue: Queue<AuthCleanupJobData, CleanupResult>,
   ) {}
 
   /**
@@ -56,6 +62,28 @@ export class JobsService {
     );
 
     this.logger.log(`Enqueued ping job with ID: ${job.id}`);
+    return job;
+  }
+
+  /**
+   * Enqueues a scheduled or on-demand authentication session and token cleanup job.
+   */
+  async addAuthCleanupJob(
+    data: AuthCleanupJobData = {},
+  ): Promise<Job<AuthCleanupJobData, CleanupResult>> {
+    const job = await this.cleanupQueue.add(AUTH_CLEANUP_JOB, data, {
+      attempts: 2,
+      removeOnComplete: {
+        count: 50,
+        age: 86400, // 24 hours
+      },
+      removeOnFail: {
+        count: 50,
+        age: 86400 * 7, // 7 days
+      },
+    });
+
+    this.logger.log(`Enqueued auth cleanup job with ID: ${job.id}`);
     return job;
   }
 

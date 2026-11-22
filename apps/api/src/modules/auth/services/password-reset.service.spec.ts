@@ -5,6 +5,7 @@ import { PasswordResetService } from './password-reset.service';
 import { PrismaService } from '../../../database/prisma.service';
 import { PasswordHashingService } from './password-hashing.service';
 import { SessionService } from './session.service';
+import { AccountLockoutService } from './account-lockout.service';
 import { EMAIL_PROVIDER } from '../../email/interfaces/email-provider.interface';
 import { hashToken } from '../utils/token.utils';
 
@@ -35,6 +36,9 @@ describe('PasswordResetService', () => {
   };
   let emailProviderMock: {
     sendPasswordResetEmail: jest.Mock;
+  };
+  let accountLockoutServiceMock: {
+    resetLockout: jest.Mock;
   };
 
   const defaultTtlMinutes = 30;
@@ -81,6 +85,10 @@ describe('PasswordResetService', () => {
       sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
     };
 
+    accountLockoutServiceMock = {
+      resetLockout: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PasswordResetService,
@@ -88,6 +96,7 @@ describe('PasswordResetService', () => {
         { provide: ConfigService, useValue: configServiceMock },
         { provide: PasswordHashingService, useValue: passwordHashingServiceMock },
         { provide: SessionService, useValue: sessionServiceMock },
+        { provide: AccountLockoutService, useValue: accountLockoutServiceMock },
         { provide: EMAIL_PROVIDER, useValue: emailProviderMock },
       ],
     }).compile();
@@ -236,10 +245,13 @@ describe('PasswordResetService', () => {
       // 2. Transaction used for atomic consumption and update
       expect(prismaMock.$transaction).toHaveBeenCalled();
 
-      // 3. User password updated
+      // 3. User password updated with token version increment for immediate access token revocation
       expect(prismaMock.user.update).toHaveBeenCalledWith({
         where: { id: validUserId },
-        data: { passwordHash: '$argon2id$v=19$new-hash-value' },
+        data: {
+          passwordHash: '$argon2id$v=19$new-hash-value',
+          tokenVersion: { increment: 1 },
+        },
       });
 
       // 4. Token marked as used

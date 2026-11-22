@@ -42,7 +42,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, JWT_STRATEGY_NAME) {
       throw new UnauthorizedException('Malformed token payload');
     }
 
-    const { sub } = payload as Partial<JwtPayload>;
+    const { sub, tokenVersion } = payload as Partial<JwtPayload>;
 
     if (!sub || typeof sub !== 'string') {
       throw new UnauthorizedException('Invalid token subject claim');
@@ -55,6 +55,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, JWT_STRATEGY_NAME) {
         id: true,
         email: true,
         emailVerifiedAt: true,
+        tokenVersion: true,
       },
     });
 
@@ -66,6 +67,11 @@ export class JwtStrategy extends PassportStrategy(Strategy, JWT_STRATEGY_NAME) {
       throw new UnauthorizedException(
         'Email verification is required to access this resource',
       );
+    }
+
+    // Immediate access token invalidation: enforce token version match
+    if (typeof tokenVersion !== 'number' || tokenVersion !== user.tokenVersion) {
+      throw new UnauthorizedException('Access token has been revoked');
     }
 
     return {

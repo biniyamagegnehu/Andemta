@@ -12,6 +12,7 @@ import {
 } from '../../email/interfaces/email-provider.interface';
 import { PasswordHashingService } from './password-hashing.service';
 import { SessionService } from './session.service';
+import { AccountLockoutService } from './account-lockout.service';
 import { generateRawToken, hashToken } from '../utils/token.utils';
 
 export const GENERIC_FORGOT_PASSWORD_MESSAGE =
@@ -31,6 +32,7 @@ export class PasswordResetService {
     private readonly configService: ConfigService,
     private readonly passwordHashingService: PasswordHashingService,
     private readonly sessionService: SessionService,
+    private readonly accountLockoutService: AccountLockoutService,
     @Inject(EMAIL_PROVIDER)
     private readonly emailProvider: EmailProvider,
   ) {
@@ -164,6 +166,7 @@ export class PasswordResetService {
         user: {
           select: {
             id: true,
+            email: true,
           },
         },
       },
@@ -213,11 +216,12 @@ export class PasswordResetService {
         );
       }
 
-      // Update the user's password hash
+      // Update the user's password hash and increment tokenVersion to revoke all active JWTs
       await tx.user.update({
         where: { id: tokenRecord.userId },
         data: {
           passwordHash: newPasswordHash,
+          tokenVersion: { increment: 1 },
         },
       });
 
@@ -235,6 +239,11 @@ export class PasswordResetService {
 
     // 8. Revoke all active sessions for this user across all devices
     await this.sessionService.revokeAllUserSessions(tokenRecord.userId);
+
+    // 9. Reset lockout counter for legitimate account recovery
+    if (tokenRecord.user?.email) {
+      await this.accountLockoutService.resetLockout(tokenRecord.user.email);
+    }
 
     this.logger.log(
       `Password successfully reset and all sessions revoked for user id: ${tokenRecord.userId}`,

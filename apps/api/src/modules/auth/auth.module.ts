@@ -9,6 +9,8 @@ import { EmailVerificationService } from './services/email-verification.service'
 import { PasswordResetService } from './services/password-reset.service';
 import { GoogleOAuthService } from './services/google-oauth.service';
 import { SessionService } from './services/session.service';
+import { AccountLockoutService } from './services/account-lockout.service';
+import { AuthCleanupService } from './services/auth-cleanup.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CsrfOriginGuard } from './guards/csrf-origin.guard';
@@ -49,6 +51,8 @@ import { EmailModule } from '../email/email.module';
     PasswordResetService,
     GoogleOAuthService,
     SessionService,
+    AccountLockoutService,
+    AuthCleanupService,
     JwtStrategy,
     JwtAuthGuard,
     CsrfOriginGuard,
@@ -60,6 +64,8 @@ import { EmailModule } from '../email/email.module';
     PasswordResetService,
     GoogleOAuthService,
     SessionService,
+    AccountLockoutService,
+    AuthCleanupService,
     JwtAuthGuard,
     CsrfOriginGuard,
     JwtStrategy,

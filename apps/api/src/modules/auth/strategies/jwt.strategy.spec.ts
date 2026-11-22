@@ -61,11 +61,13 @@ describe('JwtStrategy', () => {
       id: 'c1f7a049-74d1-4db8-b570-5b5832a52df4',
       email: 'researcher@andemta.et',
       emailVerifiedAt: verifiedDate,
+      tokenVersion: 0,
       passwordHash: 'secret-hash-should-not-be-returned',
     });
 
     const payload = {
       sub: 'c1f7a049-74d1-4db8-b570-5b5832a52df4',
+      tokenVersion: 0,
       jti: 'f1f2f3f4',
       iss: 'andemta-api',
       aud: 'andemta-client',
@@ -87,8 +89,44 @@ describe('JwtStrategy', () => {
         id: true,
         email: true,
         emailVerifiedAt: true,
+        tokenVersion: true,
       },
     });
+  });
+
+  it('should reject token when tokenVersion does not match user tokenVersion in database', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'c1f7a049-74d1-4db8-b570-5b5832a52df4',
+      email: 'researcher@andemta.et',
+      emailVerifiedAt: new Date(),
+      tokenVersion: 1, // Incremented after password reset
+    });
+
+    const oldPayload = {
+      sub: 'c1f7a049-74d1-4db8-b570-5b5832a52df4',
+      tokenVersion: 0, // Old token version
+    };
+
+    await expect(strategy.validate(oldPayload)).rejects.toThrow(
+      new UnauthorizedException('Access token has been revoked'),
+    );
+  });
+
+  it('should reject token when tokenVersion is missing from payload', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'c1f7a049-74d1-4db8-b570-5b5832a52df4',
+      email: 'researcher@andemta.et',
+      emailVerifiedAt: new Date(),
+      tokenVersion: 0,
+    });
+
+    const legacyPayload = {
+      sub: 'c1f7a049-74d1-4db8-b570-5b5832a52df4',
+    };
+
+    await expect(strategy.validate(legacyPayload)).rejects.toThrow(
+      new UnauthorizedException('Access token has been revoked'),
+    );
   });
 
   it('should reject malformed payload that is null or not an object', async () => {

@@ -22,6 +22,7 @@ export interface RotateSessionResult {
     id: string;
     email: string;
     emailVerifiedAt: Date | null;
+    tokenVersion: number;
   };
 }
 
@@ -144,6 +145,7 @@ export class SessionService {
             id: true,
             email: true,
             emailVerifiedAt: true,
+            tokenVersion: true,
           },
         },
       },

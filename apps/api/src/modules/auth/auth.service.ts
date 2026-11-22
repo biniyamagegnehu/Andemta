@@ -16,6 +16,7 @@ import { RegisterResponseDto } from './dto/register-response.dto';
 import { LoginDto } from './dto/login.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
 import { SessionService } from './services/session.service';
+import { AccountLockoutService } from './services/account-lockout.service';
 import { DUMMY_ARGON2_HASH } from './constants/auth.constants';
 import { parseDurationToSeconds } from './utils/token.utils';
 
@@ -34,6 +35,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly sessionService: SessionService,
+    private readonly accountLockoutService: AccountLockoutService,
   ) {}
 
   /**
@@ -170,19 +172,24 @@ export class AuthService {
   ): Promise<LoginResult> {
     const normalizedEmail = this.normalizeEmail(dto.email);
 
-    // 1. Database user lookup by normalized email
+    // 1. Account lockout protection (Stage B)
+    await this.accountLockoutService.checkLockout(normalizedEmail);
+
+    // 2. Database user lookup by normalized email
     const user = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
       select: {
         id: true,
         email: true,
         passwordHash: true,
+        tokenVersion: true,
         emailVerifiedAt: true,
       },
     });
 
-    // 2. Timing attack mitigation: verify against dummy hash if account or password hash does not exist
+    // 3. Timing attack mitigation: verify against dummy hash if account or password hash does not exist
     if (!user || !user.passwordHash) {
+      await this.accountLockoutService.recordFailedAttempt(normalizedEmail);
       await this.passwordHashingService.verify(
         DUMMY_ARGON2_HASH,
         dto.password,
@@ -190,27 +197,31 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    // 3. Verify candidate password against stored Argon2id hash
+    // 4. Verify candidate password against stored Argon2id hash
     const isPasswordValid = await this.passwordHashingService.verify(
       user.passwordHash,
       dto.password,
     );
 
     if (!isPasswordValid) {
+      await this.accountLockoutService.recordFailedAttempt(normalizedEmail);
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    // 4. Require verified email address before issuing access tokens
+    // 5. Reset lockout counter on successful password verification
+    await this.accountLockoutService.resetLockout(normalizedEmail);
+
+    // 6. Require verified email address before issuing access tokens
     if (!user.emailVerifiedAt) {
       throw new UnauthorizedException(
         'Email verification is required before logging in. Please check your inbox.',
       );
     }
 
-    // 5. Generate signed JWT access token with explicit algorithm and claims
-    const tokenResult = await this.generateAccessToken(user.id);
+    // 7. Generate signed JWT access token with token version
+    const tokenResult = await this.generateAccessToken(user.id, user.tokenVersion);
 
-    // 6. Create persistent authentication session and opaque refresh token
+    // 8. Create persistent authentication session and opaque refresh token
     const sessionResult = await this.sessionService.createSession(
       user.id,
       userAgent,
@@ -219,7 +230,7 @@ export class AuthService {
 
     this.logger.log(`User logged in successfully (id: ${user.id})`);
 
-    // 7. Return response contract along with raw refresh token for cookie transport
+    // 9. Return response contract along with raw refresh token for cookie transport
     return {
       accessToken: tokenResult.accessToken,
       tokenType: 'Bearer',
@@ -253,7 +264,10 @@ export class AuthService {
       ipAddress,
     );
 
-    const tokenResult = await this.generateAccessToken(rotationResult.userId);
+    const tokenResult = await this.generateAccessToken(
+      rotationResult.userId,
+      rotationResult.user.tokenVersion,
+    );
 
     return {
       loginResponse: {
@@ -280,23 +294,32 @@ export class AuthService {
   }
 
   /**
-   * Logs out all sessions across all devices for the specified user.
+   * Logs out all sessions across all devices for the specified user and
+   * atomically increments tokenVersion to immediately invalidate all access tokens.
    *
    * @param userId Authenticated user UUID
    */
   async logoutAll(userId: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        tokenVersion: { increment: 1 },
+      },
+    });
     await this.sessionService.revokeAllUserSessions(userId);
   }
 
   /**
    * Generates a signed JWT access token containing standard claims:
-   * sub (user ID), jti (unique UUID v4), iss, aud, iat, exp.
+   * sub (user ID), tokenVersion (version counter), jti (unique UUID v4), iss, aud, iat, exp.
    *
    * @param userId Authenticated user account UUID
+   * @param tokenVersion Current account token version
    * @returns Signed JWT string and expiration time in seconds
    */
   async generateAccessToken(
     userId: string,
+    tokenVersion = 0,
   ): Promise<{ accessToken: string; expiresIn: number }> {
     const issuer =
       this.configService.get<string>('jwt.issuer') || 'andemta-api';
@@ -310,6 +333,7 @@ export class AuthService {
 
     const payload = {
       sub: userId,
+      tokenVersion,
       jti,
     };
 
