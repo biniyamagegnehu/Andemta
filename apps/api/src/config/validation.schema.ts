@@ -13,14 +13,26 @@ export const environmentValidationSchema = Joi.object({
     .default(
       'postgresql://postgres:postgres@localhost:5432/andemta_db?schema=public',
     ),
+  DATABASE_QUERY_TIMEOUT_MS: Joi.number().integer().min(1000).default(30000),
+
+  // Reverse proxy IP trust configuration (prevent IP spoofing)
+  TRUST_PROXY: Joi.string().optional().default('false'),
 
   // Redis configuration (Local WSL2 Ubuntu instance accessible on localhost)
   REDIS_HOST: Joi.string().default('localhost'),
   REDIS_PORT: Joi.number().port().default(6379),
-  REDIS_PASSWORD: Joi.string().optional().allow('').default(''),
+  REDIS_PASSWORD: Joi.string().when('NODE_ENV', {
+    is: 'production',
+    then: Joi.string().min(1).required(),
+    otherwise: Joi.string().optional().allow('').default(''),
+  }),
+  REDIS_TLS_ENABLED: Joi.boolean().default(false),
 
-  // Swagger documentation availability flag
-  SWAGGER_ENABLED: Joi.boolean().default(true),
+  // Rate limiting failure strategy: fail closed vs in-memory fallback
+  RATE_LIMIT_FAIL_CLOSED: Joi.boolean().default(false),
+
+  // Swagger documentation availability flag (default: false in production)
+  SWAGGER_ENABLED: Joi.boolean().default(false),
 
   // Email / Brevo SMTP configuration (Phase 3.3)
   EMAIL_PROVIDER: Joi.string().valid('nodemailer').default('nodemailer'),
@@ -52,6 +64,7 @@ export const environmentValidationSchema = Joi.object({
   AUTH_COOKIE_SAME_SITE: Joi.string()
     .valid('lax', 'strict', 'none')
     .default('lax'),
+  AUTH_CLEANUP_RETENTION_DAYS: Joi.number().integer().min(1).default(30),
 
   // Password Reset configuration (Phase 3.7)
   PASSWORD_RESET_TOKEN_TTL_MINUTES: Joi.number()

@@ -2,16 +2,22 @@ export interface AppConfiguration {
   nodeEnv: 'development' | 'production' | 'test';
   port: number;
   frontendUrl: string;
+  trustProxy?: string;
+  rateLimit: {
+    failClosed: boolean;
+  };
   swagger: {
     enabled: boolean;
   };
   database: {
     url: string;
+    queryTimeoutMs: number;
   };
   redis: {
     host: string;
     port: number;
     password?: string;
+    tlsEnabled: boolean;
   };
   email: {
     provider: string;
@@ -38,6 +44,7 @@ export interface AppConfiguration {
     cookieSameSite: 'lax' | 'strict' | 'none';
     passwordResetTokenTtlMinutes: number;
     passwordResetUrl: string;
+    cleanupRetentionDays: number;
   };
   googleOAuth: {
     clientId?: string;
@@ -55,18 +62,27 @@ export default (): AppConfiguration => ({
     'development',
   port: parseInt(process.env.PORT || '4000', 10),
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+  trustProxy: process.env.TRUST_PROXY || 'false',
+  rateLimit: {
+    failClosed: process.env.RATE_LIMIT_FAIL_CLOSED === 'true',
+  },
   swagger: {
-    enabled: process.env.SWAGGER_ENABLED !== 'false',
+    enabled: process.env.SWAGGER_ENABLED === 'true',
   },
   database: {
     url:
       process.env.DATABASE_URL ||
       'postgresql://postgres:postgres@localhost:5432/andemta_db?schema=public',
+    queryTimeoutMs: parseInt(
+      process.env.DATABASE_QUERY_TIMEOUT_MS || '30000',
+      10,
+    ),
   },
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),
     password: process.env.REDIS_PASSWORD || undefined,
+    tlsEnabled: process.env.REDIS_TLS_ENABLED === 'true',
   },
   email: {
     provider: process.env.EMAIL_PROVIDER || 'nodemailer',
@@ -113,6 +129,10 @@ export default (): AppConfiguration => ({
     passwordResetUrl:
       process.env.FRONTEND_PASSWORD_RESET_URL ||
       'http://localhost:3000/reset-password',
+    cleanupRetentionDays: parseInt(
+      process.env.AUTH_CLEANUP_RETENTION_DAYS || '30',
+      10,
+    ),
   },
   googleOAuth: {
     clientId: process.env.GOOGLE_CLIENT_ID || undefined,

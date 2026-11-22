@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from './prisma.service';
 
 describe('PrismaService', () => {
@@ -6,7 +7,20 @@ describe('PrismaService', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [PrismaService],
+      providers: [
+        PrismaService,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string, defaultValue?: any) => {
+              if (key === 'database.url')
+                return 'postgresql://postgres:password@localhost:5432/andemta_dev';
+              if (key === 'database.queryTimeoutMs') return 30000;
+              return defaultValue;
+            }),
+          },
+        },
+      ],
     }).compile();
 
     service = module.get<PrismaService>(PrismaService);
@@ -21,13 +35,19 @@ describe('PrismaService', () => {
   });
 
   describe('onModuleInit', () => {
-    it('should connect to database without throwing', async () => {
+    it('should connect to database and apply query timeout without throwing', async () => {
       const connectSpy = jest
         .spyOn(service, '$connect')
         .mockResolvedValue(undefined);
+      const executeRawSpy = jest
+        .spyOn(service, '$executeRawUnsafe')
+        .mockResolvedValue(1);
 
       await expect(service.onModuleInit()).resolves.not.toThrow();
       expect(connectSpy).toHaveBeenCalled();
+      expect(executeRawSpy).toHaveBeenCalledWith(
+        'SET statement_timeout = 30000;',
+      );
     });
 
     it('should catch and log startup connection failure without crashing application', async () => {

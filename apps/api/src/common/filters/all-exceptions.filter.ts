@@ -34,7 +34,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
     let message = 'An unexpected internal error occurred';
     let errors: ApiErrorDetail[] = [];
 
-    const isProduction = process.env.NODE_ENV === 'production';
+    // Only development environment exposes raw error messages; all other environments (production, staging, test) mask internals
+    const isDevelopment = process.env.NODE_ENV === 'development';
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -63,14 +64,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
         }
       }
     } else if (exception instanceof Error) {
-      // In development / test, log the stack trace and preserve the message
-      if (!isProduction) {
+      // In development only, log the stack trace and preserve the message
+      if (isDevelopment) {
         message = exception.message;
       }
     }
 
-    // Security guard: in production, never leak 500 internals to client
-    if (status === HttpStatus.INTERNAL_SERVER_ERROR && isProduction) {
+    // Security guard: in all non-development environments, never leak 500 internals to client
+    if (status === HttpStatus.INTERNAL_SERVER_ERROR && !isDevelopment) {
       message = 'Internal server error';
       errors = [];
     }

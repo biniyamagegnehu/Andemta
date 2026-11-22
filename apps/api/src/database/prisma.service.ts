@@ -3,7 +3,9 @@ import {
   OnModuleInit,
   OnModuleDestroy,
   Logger,
+  Optional,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '@prisma/client';
 
 @Injectable()
@@ -12,11 +14,47 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   private readonly logger = new Logger(PrismaService.name);
+  private readonly queryTimeoutMs: number;
+
+  constructor(@Optional() private readonly configService?: ConfigService) {
+    const rawUrl = configService?.get<string>('database.url');
+    const queryTimeoutMs = configService?.get<number>(
+      'database.queryTimeoutMs',
+      30000,
+    ) ?? 30000;
+
+    // Append statement_timeout parameter to PostgreSQL URL if not already specified
+    let urlWithTimeout = rawUrl;
+    if (rawUrl && !rawUrl.includes('statement_timeout')) {
+      const separator = rawUrl.includes('?') ? '&' : '?';
+      urlWithTimeout = `${rawUrl}${separator}statement_timeout=${queryTimeoutMs}`;
+    }
+
+    super(
+      urlWithTimeout
+        ? {
+            datasources: {
+              db: {
+                url: urlWithTimeout,
+              },
+            },
+          }
+        : undefined,
+    );
+
+    this.queryTimeoutMs = queryTimeoutMs;
+  }
 
   async onModuleInit(): Promise<void> {
     try {
       await this.$connect();
-      this.logger.log('PostgreSQL connection established via Prisma');
+      // Apply session statement timeout for all subsequent queries on this connection pool
+      await this.$executeRawUnsafe(
+        `SET statement_timeout = ${this.queryTimeoutMs};`,
+      );
+      this.logger.log(
+        `PostgreSQL connection established via Prisma (${this.queryTimeoutMs}ms query timeout configured)`,
+      );
     } catch (error) {
       this.logger.warn(
         `Failed to connect to PostgreSQL on startup: ${(error as Error).message}. Service will retry on query.`,

@@ -11,11 +11,13 @@ export class RedisService implements OnModuleDestroy {
     const host = this.configService.get<string>('redis.host', 'localhost');
     const port = this.configService.get<number>('redis.port', 6379);
     const password = this.configService.get<string>('redis.password');
+    const tlsEnabled = this.configService.get<boolean>('redis.tlsEnabled', false);
 
     const options: RedisOptions = {
       host,
       port,
       password: password || undefined,
+      tls: tlsEnabled ? { rejectUnauthorized: true } : undefined,
       lazyConnect: true,
       maxRetriesPerRequest: 3,
       retryStrategy: (times) => {
