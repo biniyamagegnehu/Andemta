@@ -179,24 +179,24 @@ describe('GoogleOAuthService', () => {
   });
 
   describe('handleCallback — Validation & Error Defenses', () => {
-    it('should redirect to failure URL with oauth_not_configured when not configured', async () => {
+    it('should redirect to failure URL with generic auth_failed when not configured', async () => {
       jest.spyOn(service, 'isConfigured').mockReturnValue(false);
 
       const result = await service.handleCallback('code', 'state');
       expect(result.success).toBe(false);
-      expect(result.redirectUrl).toBe(`${defaultFailureUrl}?error=oauth_not_configured`);
+      expect(result.redirectUrl).toBe(`${defaultFailureUrl}?error=auth_failed`);
     });
 
-    it('should redirect to failure URL with invalid_or_expired_state when state is not found in Redis', async () => {
+    it('should redirect to failure URL with generic auth_failed when state is not found in Redis', async () => {
       redisClientMock.getdel.mockResolvedValue(null);
 
       const result = await service.handleCallback('valid-code', 'nonexistent-or-expired-state');
       expect(result.success).toBe(false);
-      expect(result.redirectUrl).toBe(`${defaultFailureUrl}?error=invalid_or_expired_state`);
+      expect(result.redirectUrl).toBe(`${defaultFailureUrl}?error=auth_failed`);
       expect(redisClientMock.getdel).toHaveBeenCalledWith('oauth:google:state:nonexistent-or-expired-state');
     });
 
-    it('should redirect to failure URL when token exchange with Google fails', async () => {
+    it('should redirect to failure URL with generic auth_failed when token exchange with Google fails', async () => {
       const transaction = {
         state: 'valid-state',
         nonce: 'valid-nonce',
@@ -211,10 +211,10 @@ describe('GoogleOAuthService', () => {
 
       const result = await service.handleCallback('bad-code', 'valid-state');
       expect(result.success).toBe(false);
-      expect(result.redirectUrl).toBe(`${defaultFailureUrl}?error=token_exchange_failed`);
+      expect(result.redirectUrl).toBe(`${defaultFailureUrl}?error=auth_failed`);
     });
 
-    it('should redirect to failure URL when ID token verification fails', async () => {
+    it('should redirect to failure URL with generic auth_failed when ID token verification fails', async () => {
       const transaction = {
         state: 'valid-state',
         nonce: 'valid-nonce',
@@ -233,10 +233,10 @@ describe('GoogleOAuthService', () => {
 
       const result = await service.handleCallback('code', 'valid-state');
       expect(result.success).toBe(false);
-      expect(result.redirectUrl).toBe(`${defaultFailureUrl}?error=invalid_id_token`);
+      expect(result.redirectUrl).toBe(`${defaultFailureUrl}?error=auth_failed`);
     });
 
-    it('should reject when ID token nonce does not match transaction nonce (nonce mismatch defense)', async () => {
+    it('should reject when ID token nonce does not match transaction nonce (sanitized to auth_failed)', async () => {
       const transaction = {
         state: 'valid-state',
         nonce: 'expected-nonce-value',
@@ -260,7 +260,7 @@ describe('GoogleOAuthService', () => {
 
       const result = await service.handleCallback('code', 'valid-state');
       expect(result.success).toBe(false);
-      expect(result.redirectUrl).toBe(`${defaultFailureUrl}?error=nonce_mismatch`);
+      expect(result.redirectUrl).toBe(`${defaultFailureUrl}?error=auth_failed`);
     });
 
     it('should reject when Google email is not verified (unverified email defense)', async () => {

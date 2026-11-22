@@ -91,14 +91,40 @@ export class GoogleOAuthService {
   }
 
   /**
+   * Maps internal technical failure reasons to safe, generic frontend error codes.
+   * Prevents leaking implementation details (e.g. nonce mismatch, token exchange internals)
+   * while preserving required UX error codes (account_linking_required, unverified_email).
+   */
+  private sanitizeErrorCode(internalReason: string): string {
+    switch (internalReason) {
+      case 'account_linking_required':
+        return 'account_linking_required';
+      case 'unverified_email':
+        return 'unverified_email';
+      case 'access_denied':
+        return 'access_denied';
+      case 'user_already_has_google_account':
+        return 'user_already_has_google_account';
+      case 'account_already_linked_to_other_user':
+        return 'account_already_linked_to_other_user';
+      case 'email_conflict':
+        return 'email_conflict';
+      default:
+        // All internal errors (state missing/expired/corrupted, nonce mismatch, token exchange failure)
+        return 'auth_failed';
+    }
+  }
+
+  /**
    * Appends an error code parameter to the configured frontend failure destination URL.
    *
    * @param errorCode Machine-readable error code
    * @returns Formatted URL string
    */
   buildFailureUrl(errorCode: string): string {
+    const safeCode = this.sanitizeErrorCode(errorCode);
     const url = new URL(this.frontendFailureUrl);
-    url.searchParams.set('error', errorCode);
+    url.searchParams.set('error', safeCode);
     return url.toString();
   }
 

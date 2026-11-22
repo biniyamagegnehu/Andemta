@@ -187,20 +187,20 @@ describe('Authentication — Google OAuth 2.0 (E2E Integration)', () => {
       expect(res.headers.location).toBe('http://localhost:3000/login?error=access_denied');
     });
 
-    it('should redirect to failure URL with invalid_request when code or state is missing', async () => {
+    it('should redirect to failure URL with auth_failed when code or state is missing', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/auth/google/callback?code=some-code')
         .expect(302);
 
-      expect(res.headers.location).toBe('http://localhost:3000/login?error=invalid_request');
+      expect(res.headers.location).toBe('http://localhost:3000/login?error=auth_failed');
     });
 
-    it('should redirect to failure URL with invalid_or_expired_state when state is unknown or expired in Redis', async () => {
+    it('should redirect to failure URL with auth_failed when state is unknown or expired in Redis', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/auth/google/callback?code=some-code&state=nonexistent-state')
         .expect(302);
 
-      expect(res.headers.location).toBe('http://localhost:3000/login?error=invalid_or_expired_state');
+      expect(res.headers.location).toBe('http://localhost:3000/login?error=auth_failed');
     });
   });
 
