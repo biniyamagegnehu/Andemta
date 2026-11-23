@@ -3,12 +3,14 @@ import { tokenManager } from './token-manager';
 import {
   ApiError,
   type AuthUser,
+  type ForgotPasswordDto,
   type LoginDto,
   type LoginResponseData,
   type RegisterDto,
   type RegisterResponseData,
   type RequestOptions,
   type ResendVerificationResponseData,
+  type ResetPasswordDto,
   type VerifyEmailResponseData,
 } from './types';
 
@@ -200,6 +202,44 @@ export const authClient = {
         skipRefreshRetry: true,
       },
     );
+  },
+
+  /**
+   * Requests password reset instructions via POST /api/v1/auth/forgot-password.
+   * Dispatches a reset email if the account exists, returning a generic message to prevent enumeration.
+   */
+  forgotPassword(
+    emailOrDto: string | ForgotPasswordDto,
+  ): Promise<Record<string, unknown>> {
+    const email = typeof emailOrDto === 'string' ? emailOrDto : emailOrDto.email;
+    return apiClient.post<Record<string, unknown>>(
+      '/auth/forgot-password',
+      { email },
+      {
+        skipAuth: true,
+        skipRefreshRetry: true,
+      },
+    );
+  },
+
+  /**
+   * Completes the password recovery workflow via POST /api/v1/auth/reset-password.
+   * Consumes the one-time token, updates password, and revokes active sessions.
+   * Clears any local in-memory access token.
+   */
+  async resetPassword(dto: ResetPasswordDto): Promise<Record<string, unknown>> {
+    try {
+      return await apiClient.post<Record<string, unknown>>(
+        '/auth/reset-password',
+        dto,
+        {
+          skipAuth: true,
+          skipRefreshRetry: true,
+        },
+      );
+    } finally {
+      tokenManager.clearAccessToken();
+    }
   },
 
   /**

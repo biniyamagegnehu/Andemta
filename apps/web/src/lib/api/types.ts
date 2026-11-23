@@ -113,6 +113,21 @@ export interface ResendVerificationResponseData {
 }
 
 /**
+ * Request payload for POST /api/v1/auth/forgot-password.
+ */
+export interface ForgotPasswordDto {
+  email: string;
+}
+
+/**
+ * Request payload for POST /api/v1/auth/reset-password.
+ */
+export interface ResetPasswordDto {
+  token: string;
+  newPassword: string;
+}
+
+/**
  * Request options for API client invocations.
  */
 export interface RequestOptions extends Omit<RequestInit, 'body'> {
