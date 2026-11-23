@@ -9,6 +9,7 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
+  CheckCircle2,
   Loader2,
   ShieldAlert,
 } from 'lucide-react';
@@ -46,6 +47,7 @@ export function LoginForm() {
   const searchParams = useSearchParams();
   const returnUrl = searchParams.get('returnUrl');
   const oauthErrorCode = searchParams.get('error');
+  const isResetSuccess = searchParams.get('reset') === 'success';
 
   const { loginState, isAuthenticated } = useAuth();
 
@@ -184,6 +186,19 @@ export function LoginForm() {
           </span>
         </div>
       </div>
+
+      {/* Password Reset Success Notice */}
+      {isResetSuccess && (
+        <div
+          role="status"
+          className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 text-xs text-emerald-800 flex items-start gap-3"
+        >
+          <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+          <p className="font-medium flex-1">
+            Your password has been reset successfully. Please sign in with your new password.
+          </p>
+        </div>
+      )}
 
       {/* Server / Validation Error Notice */}
       {serverError && (
