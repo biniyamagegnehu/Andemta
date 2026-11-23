@@ -23,6 +23,7 @@
     "prisma:validate": "npm run prisma:validate --workspace=@andemta/api",
     "prisma:migrate:dev": "npm run prisma:migrate:dev --workspace=@andemta/api",
     "prisma:migrate:deploy": "npm run prisma:migrate:deploy --workspace=@andemta/api",
+    "prisma:seed": "npm run prisma:seed --workspace=@andemta/api",
     "prisma:studio": "npm run prisma:studio --workspace=@andemta/api"
   },
   "devDependencies": {

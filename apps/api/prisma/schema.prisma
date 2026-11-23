@@ -30,6 +30,10 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
 
+  // RBAC relationships (Phase 4.1)
+  systemRoles             UserSystemRole[]
+  organizationMemberships OrganizationMembership[]
+
   @@map("users")
 }
 
@@ -110,4 +114,149 @@ model PasswordResetToken {
   @@index([userId])
   @@index([expiresAt])
   @@map("password_reset_tokens")
+}
+
+// ==============================================================================
+// RBAC & AUTHORIZATION MODELS (Phase 4.1)
+// ==============================================================================
+
+/// Authorization scope: global system-level vs organization-level.
+enum RoleScope {
+  SYSTEM
+  ORGANIZATION
+}
+
+/// Organization classifications.
+enum OrganizationType {
+  BUSINESS
+  UNIVERSITY
+  OTHER
+}
+
+/// Operational status for organizations.
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+/// Operational status for organization memberships.
+enum MembershipStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+  INACTIVE
+}
+
+/// Represents an authorization role with a specific scope (SYSTEM or ORGANIZATION).
+model Role {
+  id          String    @id @default(uuid()) @db.Uuid
+  scope       RoleScope
+  code        String
+  name        String
+  description String?
+  isActive    Boolean   @default(true) @map("is_active")
+  isBuiltIn   Boolean   @default(true) @map("is_built_in")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  rolePermissions         RolePermission[]
+  userSystemRoles         UserSystemRole[]
+  organizationMemberships OrganizationMembership[]
+
+  @@unique([scope, code])
+  @@unique([id, scope])
+  @@index([scope])
+  @@index([isActive])
+  @@map("roles")
+}
+
+/// Represents an atomic resource-action authorization permission.
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  name        String
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  rolePermissions RolePermission[]
+
+  @@index([isActive])
+  @@map("permissions")
+}
+
+/// Maps permissions granted to a role.
+model RolePermission {
+  id           String   @id @default(uuid()) @db.Uuid
+  roleId       String   @map("role_id") @db.Uuid
+  permissionId String   @map("permission_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+/// Connects a user to a platform system-level role (e.g. PARTICIPANT, ADMIN).
+model UserSystemRole {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  roleId    String    @map("role_id") @db.Uuid
+  roleScope RoleScope @default(SYSTEM) @map("role_scope")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId, roleScope], references: [id, scope], onDelete: Restrict)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("user_system_roles")
+}
+
+/// Represents an organization (e.g. Business, University) in Andemta.
+model Organization {
+  id        String             @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String             @unique
+  type      OrganizationType   @default(OTHER)
+  status    OrganizationStatus @default(ACTIVE)
+  settings  Json?              @db.JsonB
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+
+  memberships OrganizationMembership[]
+
+  @@index([status])
+  @@index([type])
+  @@map("organizations")
+}
+
+/// Connects a user to an organization with an organization-scoped role.
+model OrganizationMembership {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  roleId         String           @map("role_id") @db.Uuid
+  roleScope      RoleScope        @default(ORGANIZATION) @map("role_scope")
+  status         MembershipStatus @default(ACTIVE)
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId, roleScope], references: [id, scope], onDelete: Restrict)
+
+  @@unique([userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([roleId])
+  @@index([status])
+  @@map("organization_memberships")
 }
