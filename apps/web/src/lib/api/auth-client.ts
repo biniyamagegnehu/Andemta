@@ -1,8 +1,9 @@
-import { apiClient } from './api-client';
+import { apiClient, getApiBaseUrl } from './api-client';
 import { tokenManager } from './token-manager';
 import {
   ApiError,
   type AuthUser,
+  type LoginDto,
   type LoginResponseData,
   type RegisterDto,
   type RegisterResponseData,
@@ -128,6 +129,32 @@ export async function authenticatedRequest<T = unknown>(
  * Centralized authentication API client facade.
  */
 export const authClient = {
+  /**
+   * Authenticates user credentials with email and password via POST /api/v1/auth/login.
+   * On success, stores the JWT access token in memory (tokenManager).
+   * Backend delivers refresh token in an HttpOnly cookie.
+   */
+  async login(dto: LoginDto): Promise<LoginResponseData> {
+    const data = await apiClient.post<LoginResponseData>('/auth/login', dto, {
+      skipAuth: true,
+      skipRefreshRetry: true,
+    });
+
+    if (data?.accessToken) {
+      tokenManager.setAccessToken(data.accessToken);
+    }
+
+    return data;
+  },
+
+  /**
+   * Returns the backend URL to initiate the Google OAuth 2.0 flow.
+   * Directs the browser to GET /api/v1/auth/google.
+   */
+  getGoogleAuthUrl(): string {
+    return `${getApiBaseUrl()}/auth/google`;
+  },
+
   /**
    * Executes session refresh via HttpOnly refresh cookie.
    */

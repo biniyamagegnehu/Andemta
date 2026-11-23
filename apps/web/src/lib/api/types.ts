@@ -58,6 +58,14 @@ export interface LoginResponseData {
 }
 
 /**
+ * Login request payload for POST /api/v1/auth/login.
+ */
+export interface LoginDto {
+  email: string;
+  password: string;
+}
+
+/**
  * Registration request payload for POST /api/v1/auth/register.
  */
 export interface RegisterDto {
