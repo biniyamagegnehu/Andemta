@@ -4,11 +4,16 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { RoleScope } from '@prisma/client';
+import {
+  RoleScope,
+  MembershipStatus,
+  OrganizationStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
 import {
   PermissionCode,
   isValidPermissionCode,
+  getPermissionScope,
 } from '../constants/permissions';
 import { BUILT_IN_ROLE_PERMISSION_MAPPINGS } from '../constants/role-permissions';
 import {
@@ -161,6 +166,186 @@ export class RolePermissionService {
       },
     });
     return count > 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Runtime User Authorization Queries (Phase 4.3)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Loads all active system-level permission codes granted to a user
+   * via active UserSystemRole assignments in a single database query.
+   */
+  async getUserSystemPermissions(
+    userId: string,
+  ): Promise<Set<PermissionCode>> {
+    const userSystemRoles = await this.prisma.userSystemRole.findMany({
+      where: {
+        userId,
+        roleScope: RoleScope.SYSTEM,
+        role: {
+          isActive: true,
+          scope: RoleScope.SYSTEM,
+        },
+      },
+      select: {
+        role: {
+          select: {
+            rolePermissions: {
+              where: {
+                permission: {
+                  isActive: true,
+                },
+              },
+              select: {
+                permission: {
+                  select: {
+                    code: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const granted = new Set<PermissionCode>();
+    for (const assignment of userSystemRoles) {
+      for (const rp of assignment.role.rolePermissions) {
+        if (isValidPermissionCode(rp.permission.code)) {
+          granted.add(rp.permission.code);
+        }
+      }
+    }
+
+    return granted;
+  }
+
+  /**
+   * Loads all active organization-level permission codes granted to a user
+   * within a specific organization in a single database query.
+   *
+   * Enforces:
+   * - Active membership (MembershipStatus.ACTIVE)
+   * - Active organization (OrganizationStatus.ACTIVE)
+   * - Active role with RoleScope.ORGANIZATION
+   * - Active permissions
+   */
+  async getUserOrganizationPermissions(
+    userId: string,
+    organizationId: string,
+  ): Promise<Set<PermissionCode>> {
+    const membership = await this.prisma.organizationMembership.findUnique({
+      where: {
+        userId_organizationId: {
+          userId,
+          organizationId,
+        },
+      },
+      select: {
+        status: true,
+        roleScope: true,
+        organization: {
+          select: {
+            status: true,
+          },
+        },
+        role: {
+          select: {
+            isActive: true,
+            scope: true,
+            rolePermissions: {
+              where: {
+                permission: {
+                  isActive: true,
+                },
+              },
+              select: {
+                permission: {
+                  select: {
+                    code: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (
+      !membership ||
+      membership.status !== MembershipStatus.ACTIVE ||
+      membership.organization.status !== OrganizationStatus.ACTIVE ||
+      membership.roleScope !== RoleScope.ORGANIZATION ||
+      membership.role.scope !== RoleScope.ORGANIZATION ||
+      !membership.role.isActive
+    ) {
+      return new Set<PermissionCode>();
+    }
+
+    const granted = new Set<PermissionCode>();
+    for (const rp of membership.role.rolePermissions) {
+      if (isValidPermissionCode(rp.permission.code)) {
+        granted.add(rp.permission.code);
+      }
+    }
+
+    return granted;
+  }
+
+  /**
+   * Evaluates whether a user satisfies ALL required permissions using AND semantics
+   * and strict SYSTEM vs ORGANIZATION scope isolation.
+   *
+   * - System-scoped permissions are checked strictly against UserSystemRole.
+   * - Organization-scoped permissions are checked strictly against the user's
+   *   active OrganizationMembership for the provided organizationId.
+   * - If any organization-scoped permission is required without a valid
+   *   organizationId, returns false (never falls back to system roles).
+   */
+  async userHasPermissions(
+    userId: string,
+    requiredPermissions: PermissionCode[],
+    organizationId?: string,
+  ): Promise<boolean> {
+    if (!requiredPermissions || requiredPermissions.length === 0) {
+      return false;
+    }
+
+    const systemRequired: PermissionCode[] = [];
+    const orgRequired: PermissionCode[] = [];
+
+    for (const code of requiredPermissions) {
+      if (!isValidPermissionCode(code)) {
+        return false;
+      }
+      if (getPermissionScope(code) === RoleScope.SYSTEM) {
+        systemRequired.push(code);
+      } else {
+        orgRequired.push(code);
+      }
+    }
+
+    // Organization-scoped permissions require a valid organization context
+    if (orgRequired.length > 0 && !organizationId) {
+      return false;
+    }
+
+    const [systemGranted, orgGranted] = await Promise.all([
+      systemRequired.length > 0
+        ? this.getUserSystemPermissions(userId)
+        : Promise.resolve(new Set<PermissionCode>()),
+      orgRequired.length > 0 && organizationId
+        ? this.getUserOrganizationPermissions(userId, organizationId)
+        : Promise.resolve(new Set<PermissionCode>()),
+    ]);
+
+    const hasSystem = systemRequired.every((code) => systemGranted.has(code));
+    const hasOrg = orgRequired.every((code) => orgGranted.has(code));
+
+    return hasSystem && hasOrg;
   }
 
   // ---------------------------------------------------------------------------
