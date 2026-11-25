@@ -1,21 +1,24 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../../database/database.module';
+import { AuthModule } from '../auth/auth.module';
 import { RolePermissionService } from './services/role-permission.service';
+import { PermissionsGuard } from './guards/permissions.guard';
 
 /**
- * RbacModule — Phase 4.2: Permissions Catalog and Role-Permission Management.
+ * RbacModule — Phase 4.2 & 4.3: Permissions Catalog, Role-Permission Management,
+ * and Runtime Authorization Guards.
  *
- * Provides the centralized RBAC service layer: role queries, permission catalog
- * access, scope validation, and idempotent role-permission synchronization.
+ * Provides:
+ * - RolePermissionService (queries, scope validation, idempotent sync, runtime permission checks)
+ * - PermissionsGuard (enforces @RequirePermissions metadata using JwtAuthGuard + DB lookups)
  *
  * Does NOT provide:
- * - HTTP controllers or REST endpoints (Phase 4.3+)
- * - NestJS authorization guards or decorators (Phase 4.3+)
- * - User role assignment APIs (Phase 4.3+)
+ * - Organization or membership management endpoints (Phase 4.4+)
+ * - User role assignment endpoints (Phase 4.4+)
  */
 @Module({
-  imports: [DatabaseModule],
-  providers: [RolePermissionService],
-  exports: [RolePermissionService],
+  imports: [DatabaseModule, AuthModule],
+  providers: [RolePermissionService, PermissionsGuard],
+  exports: [RolePermissionService, PermissionsGuard],
 })
 export class RbacModule {}
