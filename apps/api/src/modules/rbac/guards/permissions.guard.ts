@@ -4,11 +4,13 @@ import {
   ExecutionContext,
   UnauthorizedException,
   ForbiddenException,
+  HttpException,
   InternalServerErrorException,
   Logger,
   Optional,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { RoleScope } from '@prisma/client';
 import { isObservable, lastValueFrom } from 'rxjs';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
@@ -16,11 +18,11 @@ import { REQUIRED_PERMISSIONS_KEY } from '../decorators/require-permissions.deco
 import {
   PermissionCode,
   isValidPermissionCode,
+  getPermissionScope,
 } from '../constants/permissions';
+import { OrganizationContext } from '../interfaces/rbac.interfaces';
 import { RolePermissionService } from '../services/role-permission.service';
-
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { OrganizationAuthorizationService } from '../services/organization-authorization.service';
 
 /**
  * Runtime permission enforcement guard for the Andemta RBAC system.
@@ -32,9 +34,13 @@ const UUID_REGEX =
  * - If permission metadata is declared, ensures JWT authentication has succeeded
  *   (delegating to JwtAuthGuard if request.user is not already populated).
  * - Validates metadata integrity; invalid/empty metadata fails closed with 500.
- * - Checks permissions against trusted PostgreSQL records via RolePermissionService
- *   using AND semantics and strict SYSTEM vs ORGANIZATION scope isolation.
- * - Returns 401 for missing/invalid authentication and 403 for insufficient permissions.
+ * - For SYSTEM-scoped permissions, evaluates against UserSystemRole.
+ * - For ORGANIZATION-scoped permissions, uses validated request.organizationContext
+ *   (or validates via OrganizationAuthorizationService and attaches it to request).
+ * - Enforces AND semantics across all declared permissions.
+ * - Returns 401 for missing/invalid auth, 400 for malformed org ID, 404 for
+ *   nonexistent org, and 403 for inactive org, missing/inactive membership, or
+ *   insufficient permissions.
  */
 @Injectable()
 export class PermissionsGuard implements CanActivate {
@@ -44,11 +50,11 @@ export class PermissionsGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly rolePermissionService: RolePermissionService,
     @Optional() private readonly jwtAuthGuard?: JwtAuthGuard,
+    @Optional()
+    private readonly organizationAuthService?: OrganizationAuthorizationService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // Handler-level metadata overrides controller-level metadata when present;
-    // otherwise inherit controller-level metadata.
     const requiredPermissions = this.reflector.getAllAndOverride<
       PermissionCode[] | undefined
     >(REQUIRED_PERMISSIONS_KEY, [context.getHandler(), context.getClass()]);
@@ -77,9 +83,10 @@ export class PermissionsGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<{
       user?: AuthenticatedUser;
       params?: Record<string, string | undefined>;
+      organizationContext?: OrganizationContext;
     }>();
 
-    // Ensure authentication has been established using the existing JwtAuthGuard
+    // Step 1: Ensure JWT authentication has succeeded
     if (!request.user) {
       if (!this.jwtAuthGuard) {
         throw new UnauthorizedException('Authentication required');
@@ -100,21 +107,64 @@ export class PermissionsGuard implements CanActivate {
       throw new UnauthorizedException('Authentication required');
     }
 
-    const rawOrgId =
-      request.params?.organizationId ?? request.params?.orgId ?? undefined;
-    const organizationId =
-      typeof rawOrgId === 'string' && UUID_REGEX.test(rawOrgId)
-        ? rawOrgId
-        : undefined;
+    const systemRequired: PermissionCode[] = [];
+    const orgRequired: PermissionCode[] = [];
 
-    let hasPermissions: boolean;
+    for (const code of requiredPermissions) {
+      if (getPermissionScope(code) === RoleScope.SYSTEM) {
+        systemRequired.push(code);
+      } else {
+        orgRequired.push(code);
+      }
+    }
+
     try {
-      hasPermissions = await this.rolePermissionService.userHasPermissions(
-        userId,
-        requiredPermissions,
-        organizationId,
-      );
+      // Step 2: Resolve and validate organization context if any org permission is required
+      let orgGranted = new Set<PermissionCode>();
+      if (orgRequired.length > 0) {
+        if (
+          request.organizationContext &&
+          request.organizationContext.userId === userId
+        ) {
+          orgGranted = new Set(request.organizationContext.permissions);
+        } else if (this.organizationAuthService) {
+          const organizationId =
+            this.organizationAuthService.extractOrganizationIdFromParams(
+              request.params,
+            );
+          const orgContext =
+            await this.organizationAuthService.validateOrganizationAccess(
+              userId,
+              organizationId,
+            );
+          request.organizationContext = orgContext;
+          orgGranted = new Set(orgContext.permissions);
+        } else {
+          throw new ForbiddenException('Organization context is required');
+        }
+      }
+
+      // Step 3: Evaluate system permissions (if any) + organization permissions (AND semantics)
+      let systemGranted = new Set<PermissionCode>();
+      if (systemRequired.length > 0) {
+        systemGranted =
+          await this.rolePermissionService.getUserSystemPermissions(userId);
+      }
+
+      const hasSystem = systemRequired.every((code) => systemGranted.has(code));
+      const hasOrg = orgRequired.every((code) => orgGranted.has(code));
+
+      if (!hasSystem || !hasOrg) {
+        throw new ForbiddenException(
+          'You do not have permission to perform this action',
+        );
+      }
+
+      return true;
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       this.logger.error(
         `Database error while evaluating permissions for user ${userId}: ${
           error instanceof Error ? error.message : 'Unknown error'
@@ -124,13 +174,5 @@ export class PermissionsGuard implements CanActivate {
         'Unable to verify authorization',
       );
     }
-
-    if (!hasPermissions) {
-      throw new ForbiddenException(
-        'You do not have permission to perform this action',
-      );
-    }
-
-    return true;
   }
 }

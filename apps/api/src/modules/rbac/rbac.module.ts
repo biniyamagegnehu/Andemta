@@ -2,23 +2,33 @@ import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../../database/database.module';
 import { AuthModule } from '../auth/auth.module';
 import { RolePermissionService } from './services/role-permission.service';
+import { OrganizationAuthorizationService } from './services/organization-authorization.service';
 import { PermissionsGuard } from './guards/permissions.guard';
+import { OrganizationAuthGuard } from './guards/organization-auth.guard';
 
 /**
- * RbacModule — Phase 4.2 & 4.3: Permissions Catalog, Role-Permission Management,
- * and Runtime Authorization Guards.
+ * RbacModule — Phase 4.2, 4.3 & 4.4: Permissions Catalog, Role-Permission Management,
+ * Runtime Authorization Guards, and Organization Membership Authorization.
  *
  * Provides:
- * - RolePermissionService (queries, scope validation, idempotent sync, runtime permission checks)
+ * - RolePermissionService (catalog queries, scope validation, idempotent sync, system permissions)
+ * - OrganizationAuthorizationService (organization context & membership validation)
+ * - OrganizationAuthGuard (validates organization & membership context)
  * - PermissionsGuard (enforces @RequirePermissions metadata using JwtAuthGuard + DB lookups)
- *
- * Does NOT provide:
- * - Organization or membership management endpoints (Phase 4.4+)
- * - User role assignment endpoints (Phase 4.4+)
  */
 @Module({
   imports: [DatabaseModule, AuthModule],
-  providers: [RolePermissionService, PermissionsGuard],
-  exports: [RolePermissionService, PermissionsGuard],
+  providers: [
+    RolePermissionService,
+    OrganizationAuthorizationService,
+    OrganizationAuthGuard,
+    PermissionsGuard,
+  ],
+  exports: [
+    RolePermissionService,
+    OrganizationAuthorizationService,
+    OrganizationAuthGuard,
+    PermissionsGuard,
+  ],
 })
 export class RbacModule {}
