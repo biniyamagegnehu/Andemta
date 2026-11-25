@@ -159,3 +159,35 @@ export class ApiError extends Error {
     Object.setPrototypeOf(this, ApiError.prototype);
   }
 }
+
+/**
+ * Organization classifications matching backend OrganizationType enum.
+ */
+export type OrganizationType = 'BUSINESS' | 'UNIVERSITY' | 'OTHER';
+
+/**
+ * Organization status matching backend OrganizationStatus enum.
+ */
+export type OrganizationStatus = 'ACTIVE' | 'SUSPENDED' | 'INACTIVE';
+
+/**
+ * Organization summary returned by GET /api/v1/organizations.
+ */
+export interface UserOrganization {
+  id: string;
+  name: string;
+  slug: string;
+  type: OrganizationType;
+  status: OrganizationStatus;
+  createdAt: string;
+  updatedAt: string;
+  roleCode: string;
+}
+
+/**
+ * Paginated organizations payload returned by GET /api/v1/organizations.
+ */
+export interface PaginatedOrganizationsData {
+  items: UserOrganization[];
+  meta: ApiPaginationMeta;
+}
