@@ -1,23 +1,36 @@
 import {
+  BadRequestException,
   ExecutionContext,
   ForbiddenException,
   InternalServerErrorException,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { OrganizationType } from '@prisma/client';
 import { of, throwError } from 'rxjs';
 import { PermissionsGuard } from './permissions.guard';
 import { RolePermissionService } from '../services/role-permission.service';
+import { OrganizationAuthorizationService } from '../services/organization-authorization.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { PERMISSION, PermissionCode } from '../constants/permissions';
+import { OrganizationContext } from '../interfaces/rbac.interfaces';
 
 describe('PermissionsGuard', () => {
   let guard: PermissionsGuard;
   let reflector: jest.Mocked<Reflector>;
   let rolePermissionService: jest.Mocked<
-    Pick<RolePermissionService, 'userHasPermissions'>
+    Pick<RolePermissionService, 'getUserSystemPermissions'>
+  >;
+  let orgAuthService: jest.Mocked<
+    Pick<
+      OrganizationAuthorizationService,
+      'extractOrganizationIdFromParams' | 'validateOrganizationAccess'
+    >
   >;
   let jwtAuthGuard: jest.Mocked<Pick<JwtAuthGuard, 'canActivate'>>;
+
+  const validOrgId = '11111111-2222-4333-8444-555555555555';
 
   const createMockContext = (
     request: Record<string, unknown> = {},
@@ -41,7 +54,12 @@ describe('PermissionsGuard', () => {
     } as unknown as jest.Mocked<Reflector>;
 
     rolePermissionService = {
-      userHasPermissions: jest.fn(),
+      getUserSystemPermissions: jest.fn(),
+    };
+
+    orgAuthService = {
+      extractOrganizationIdFromParams: jest.fn(),
+      validateOrganizationAccess: jest.fn(),
     };
 
     jwtAuthGuard = {
@@ -52,6 +70,7 @@ describe('PermissionsGuard', () => {
       reflector,
       rolePermissionService as unknown as RolePermissionService,
       jwtAuthGuard as unknown as JwtAuthGuard,
+      orgAuthService as unknown as OrganizationAuthorizationService,
     );
   });
 
@@ -63,7 +82,7 @@ describe('PermissionsGuard', () => {
 
     expect(result).toBe(true);
     expect(jwtAuthGuard.canActivate).not.toHaveBeenCalled();
-    expect(rolePermissionService.userHasPermissions).not.toHaveBeenCalled();
+    expect(rolePermissionService.getUserSystemPermissions).not.toHaveBeenCalled();
   });
 
   it('should fail safely with 500 when permission metadata is empty array', async () => {
@@ -95,10 +114,9 @@ describe('PermissionsGuard', () => {
 
     await expect(guard.canActivate(ctx)).rejects.toThrow(UnauthorizedException);
     expect(jwtAuthGuard.canActivate).toHaveBeenCalledWith(ctx);
-    expect(rolePermissionService.userHasPermissions).not.toHaveBeenCalled();
   });
 
-  it('should reject with 401 if JwtAuthGuard returns false or observable error', async () => {
+  it('should reject with 401 if JwtAuthGuard returns observable error', async () => {
     reflector.getAllAndOverride.mockReturnValue([PERMISSION.PLATFORM_ADMIN]);
     jwtAuthGuard.canActivate.mockReturnValue(
       throwError(() => new UnauthorizedException('Invalid access token')),
@@ -121,76 +139,105 @@ describe('PermissionsGuard', () => {
     );
   });
 
-  it('should allow request when JwtAuthGuard populates user and user has permission', async () => {
+  it('should allow request when JwtAuthGuard populates user and user has system permission', async () => {
     reflector.getAllAndOverride.mockReturnValue([PERMISSION.PLATFORM_ADMIN]);
     const request: Record<string, unknown> = {};
     jwtAuthGuard.canActivate.mockImplementation(() => {
       request.user = { id: 'user-1', email: 'admin@andemta.et' };
       return of(true);
     });
-    rolePermissionService.userHasPermissions.mockResolvedValue(true);
+    rolePermissionService.getUserSystemPermissions.mockResolvedValue(
+      new Set([PERMISSION.PLATFORM_ADMIN]),
+    );
 
     const ctx = createMockContext(request);
     const result = await guard.canActivate(ctx);
 
     expect(result).toBe(true);
-    expect(rolePermissionService.userHasPermissions).toHaveBeenCalledWith(
+    expect(rolePermissionService.getUserSystemPermissions).toHaveBeenCalledWith(
       'user-1',
-      [PERMISSION.PLATFORM_ADMIN],
-      undefined,
     );
   });
 
-  it('should return 403 Forbidden when authenticated user lacks required permission', async () => {
+  it('should return 403 Forbidden when authenticated user lacks required system permission', async () => {
     reflector.getAllAndOverride.mockReturnValue([PERMISSION.PLATFORM_ADMIN]);
     const ctx = createMockContext({ user: { id: 'user-1' } });
-    rolePermissionService.userHasPermissions.mockResolvedValue(false);
+    rolePermissionService.getUserSystemPermissions.mockResolvedValue(new Set());
 
     await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
   });
 
-  it('should pass all required permissions (AND semantics) and valid UUID organizationId', async () => {
-    const orgId = '11111111-2222-4333-8444-555555555555';
+  it('should reuse pre-validated request.organizationContext and enforce AND semantics', async () => {
+    const orgContext: OrganizationContext = {
+      organizationId: validOrgId,
+      organizationType: OrganizationType.BUSINESS,
+      userId: 'user-1',
+      membershipId: 'mem-1',
+      roleCode: 'RESEARCHER',
+      permissions: [PERMISSION.RESEARCH_READ, PERMISSION.REPORTS_READ],
+    };
     reflector.getAllAndOverride.mockReturnValue([
       PERMISSION.RESEARCH_READ,
       PERMISSION.REPORTS_READ,
     ]);
     const ctx = createMockContext({
       user: { id: 'user-1' },
-      params: { organizationId: orgId },
+      params: { organizationId: validOrgId },
+      organizationContext: orgContext,
     });
-    rolePermissionService.userHasPermissions.mockResolvedValue(true);
 
     const result = await guard.canActivate(ctx);
 
     expect(result).toBe(true);
-    expect(rolePermissionService.userHasPermissions).toHaveBeenCalledWith(
-      'user-1',
-      [PERMISSION.RESEARCH_READ, PERMISSION.REPORTS_READ],
-      orgId,
-    );
+    expect(orgAuthService.validateOrganizationAccess).not.toHaveBeenCalled();
   });
 
-  it('should treat non-UUID organizationId param as undefined (fail closed for org routes)', async () => {
+  it('should validate organization access via OrganizationAuthorizationService when not pre-populated', async () => {
+    const orgContext: OrganizationContext = {
+      organizationId: validOrgId,
+      organizationType: OrganizationType.BUSINESS,
+      userId: 'user-1',
+      membershipId: 'mem-1',
+      roleCode: 'VIEWER',
+      permissions: [PERMISSION.RESEARCH_READ],
+    };
     reflector.getAllAndOverride.mockReturnValue([PERMISSION.RESEARCH_READ]);
-    const ctx = createMockContext({
-      user: { id: 'user-1' },
-      params: { organizationId: 'not-a-valid-uuid' },
-    });
-    rolePermissionService.userHasPermissions.mockResolvedValue(false);
+    orgAuthService.extractOrganizationIdFromParams.mockReturnValue(validOrgId);
+    orgAuthService.validateOrganizationAccess.mockResolvedValue(orgContext);
 
-    await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
-    expect(rolePermissionService.userHasPermissions).toHaveBeenCalledWith(
-      'user-1',
-      [PERMISSION.RESEARCH_READ],
-      undefined,
+    const request: Record<string, unknown> = {
+      user: { id: 'user-1' },
+      params: { organizationId: validOrgId },
+    };
+    const result = await guard.canActivate(createMockContext(request));
+
+    expect(result).toBe(true);
+    expect(request.organizationContext).toEqual(orgContext);
+  });
+
+  it('should propagate 400 and 404 from OrganizationAuthorizationService', async () => {
+    reflector.getAllAndOverride.mockReturnValue([PERMISSION.RESEARCH_READ]);
+    orgAuthService.extractOrganizationIdFromParams.mockReturnValue('bad-id');
+
+    orgAuthService.validateOrganizationAccess.mockRejectedValueOnce(
+      new BadRequestException('Invalid organization ID format'),
     );
+    await expect(
+      guard.canActivate(createMockContext({ user: { id: 'user-1' } })),
+    ).rejects.toThrow(BadRequestException);
+
+    orgAuthService.validateOrganizationAccess.mockRejectedValueOnce(
+      new NotFoundException('Organization not found'),
+    );
+    await expect(
+      guard.canActivate(createMockContext({ user: { id: 'user-1' } })),
+    ).rejects.toThrow(NotFoundException);
   });
 
   it('should fail closed with 500 without leaking DB error details when service throws', async () => {
     reflector.getAllAndOverride.mockReturnValue([PERMISSION.PLATFORM_ADMIN]);
     const ctx = createMockContext({ user: { id: 'user-1' } });
-    rolePermissionService.userHasPermissions.mockRejectedValue(
+    rolePermissionService.getUserSystemPermissions.mockRejectedValue(
       new Error('Connection terminated unexpectedly: pg_hba.conf'),
     );
 
