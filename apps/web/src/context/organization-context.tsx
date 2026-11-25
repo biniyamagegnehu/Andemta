@@ -38,6 +38,7 @@ export interface OrganizationContextValue {
   selectedOrganization: UserOrganization | null;
   selectedOrganizationId: string | null;
   isLoading: boolean;
+  hasLoaded: boolean;
   error: string | null;
   selectOrganization: (organizationId: string) => void;
   reloadOrganizations: () => Promise<void>;
@@ -54,12 +55,14 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     string | null
   >(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [hasLoaded, setHasLoaded] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadOrganizations = useCallback(async () => {
     if (!isAuthenticated) {
       setOrganizations([]);
       setSelectedOrganizationId(null);
+      setHasLoaded(false);
       setError(null);
       return;
     }
@@ -87,6 +90,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       setSelectedOrganizationId(null);
     } finally {
       setIsLoading(false);
+      setHasLoaded(true);
     }
   }, [isAuthenticated]);
 
@@ -95,6 +99,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     if (!isAuthenticated) {
       setOrganizations([]);
       setSelectedOrganizationId(null);
+      setHasLoaded(false);
       setError(null);
       return;
     }
@@ -124,6 +129,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     selectedOrganization,
     selectedOrganizationId,
     isLoading,
+    hasLoaded,
     error,
     selectOrganization,
     reloadOrganizations: loadOrganizations,

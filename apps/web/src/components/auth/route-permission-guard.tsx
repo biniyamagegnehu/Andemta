@@ -30,8 +30,11 @@ export function RoutePermissionGuard({
   children,
 }: RoutePermissionGuardProps) {
   const { isInitialized, isAuthenticated } = useAuth();
-  const { isLoading: isOrgListLoading, selectedOrganizationId } =
-    useOrganizations();
+  const {
+    isLoading: isOrgListLoading,
+    hasLoaded: hasOrgListLoaded,
+    selectedOrganizationId,
+  } = useOrganizations();
   const {
     isSystemLoading,
     isOrganizationLoading,
@@ -48,7 +51,8 @@ export function RoutePermissionGuard({
     !isAuthenticated ||
     (scope === 'system' && isSystemLoading) ||
     (scope === 'organization' &&
-      (isOrgListLoading ||
+      (!hasOrgListLoaded ||
+        isOrgListLoading ||
         isOrganizationLoading ||
         (selectedOrganizationId !== null &&
           organizationId !== selectedOrganizationId &&
