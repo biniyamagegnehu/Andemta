@@ -14,6 +14,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { RbacModule } from './modules/rbac/rbac.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { AdminUsersModule } from './modules/admin-users/admin-users.module';
+import { UsersModule } from './modules/users/users.module';
 import { PermissionsGuard } from './modules/rbac/guards/permissions.guard';
 import { AppThrottlerGuard } from './modules/auth/guards/app-throttler.guard';
 import { RedisThrottlerStorage } from './modules/auth/throttler/redis-throttler-storage.service';
@@ -30,6 +31,7 @@ import { REQUEST_ID_HEADER } from './common/constants';
     RbacModule,
     OrganizationsModule,
     AdminUsersModule,
+    UsersModule,
     ThrottlerModule.forRootAsync({
       imports: [RedisModule, AppConfigModule],
       inject: [RedisService, ConfigService],
