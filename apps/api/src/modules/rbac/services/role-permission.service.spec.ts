@@ -1,6 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { RoleScope } from '@prisma/client';
+import {
+  RoleScope,
+  MembershipStatus,
+  OrganizationStatus,
+} from '@prisma/client';
 import { RolePermissionService } from './role-permission.service';
 import { PERMISSION, PermissionCode } from '../constants/permissions';
 import { BUILT_IN_ROLE_PERMISSION_MAPPINGS } from '../constants/role-permissions';
@@ -51,6 +55,12 @@ describe('RolePermissionService', () => {
       findUnique: jest.fn(),
       count: jest.fn(),
       create: jest.fn(),
+    },
+    userSystemRole: {
+      findMany: jest.fn(),
+    },
+    organizationMembership: {
+      findUnique: jest.fn(),
     },
     user: { count: jest.fn() },
     session: { count: jest.fn() },
@@ -369,6 +379,128 @@ describe('RolePermissionService', () => {
       expect(keys).toContain('ORGANIZATION:RESEARCHER');
       expect(keys).toContain('ORGANIZATION:VIEWER');
       expect(keys).toHaveLength(6);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Phase 4.3 — Runtime User Authorization Queries
+  // ---------------------------------------------------------------------------
+  describe('Phase 4.3 runtime authorization methods', () => {
+    it('getUserSystemPermissions should return active permissions from active system roles', async () => {
+      prismaMock.userSystemRole.findMany.mockResolvedValue([
+        {
+          role: {
+            rolePermissions: [
+              { permission: { code: PERMISSION.SURVEY_RESPOND } },
+              { permission: { code: PERMISSION.REWARDS_CLAIM } },
+            ],
+          },
+        },
+      ]);
+
+      const perms = await service.getUserSystemPermissions('user-1');
+
+      expect(perms.has(PERMISSION.SURVEY_RESPOND)).toBe(true);
+      expect(perms.has(PERMISSION.REWARDS_CLAIM)).toBe(true);
+      expect(prismaMock.userSystemRole.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            userId: 'user-1',
+            roleScope: RoleScope.SYSTEM,
+            role: { isActive: true, scope: RoleScope.SYSTEM },
+          }),
+        }),
+      );
+    });
+
+    it('getUserOrganizationPermissions should return empty set for suspended membership', async () => {
+      prismaMock.organizationMembership.findUnique.mockResolvedValue({
+        status: MembershipStatus.SUSPENDED,
+        roleScope: RoleScope.ORGANIZATION,
+        organization: { status: OrganizationStatus.ACTIVE },
+        role: {
+          isActive: true,
+          scope: RoleScope.ORGANIZATION,
+          rolePermissions: [{ permission: { code: PERMISSION.RESEARCH_READ } }],
+        },
+      });
+
+      const perms = await service.getUserOrganizationPermissions(
+        'user-1',
+        'org-1',
+      );
+      expect(perms.size).toBe(0);
+    });
+
+    it('getUserOrganizationPermissions should return empty set for inactive role', async () => {
+      prismaMock.organizationMembership.findUnique.mockResolvedValue({
+        status: MembershipStatus.ACTIVE,
+        roleScope: RoleScope.ORGANIZATION,
+        organization: { status: OrganizationStatus.ACTIVE },
+        role: {
+          isActive: false,
+          scope: RoleScope.ORGANIZATION,
+          rolePermissions: [{ permission: { code: PERMISSION.RESEARCH_READ } }],
+        },
+      });
+
+      const perms = await service.getUserOrganizationPermissions(
+        'user-1',
+        'org-1',
+      );
+      expect(perms.size).toBe(0);
+    });
+
+    it('getUserOrganizationPermissions should return empty set for suspended organization', async () => {
+      prismaMock.organizationMembership.findUnique.mockResolvedValue({
+        status: MembershipStatus.ACTIVE,
+        roleScope: RoleScope.ORGANIZATION,
+        organization: { status: OrganizationStatus.SUSPENDED },
+        role: {
+          isActive: true,
+          scope: RoleScope.ORGANIZATION,
+          rolePermissions: [{ permission: { code: PERMISSION.RESEARCH_READ } }],
+        },
+      });
+
+      const perms = await service.getUserOrganizationPermissions(
+        'user-1',
+        'org-1',
+      );
+      expect(perms.size).toBe(0);
+    });
+
+    it('userHasPermissions should deny organization permissions when organizationId is missing', async () => {
+      const result = await service.userHasPermissions('user-1', [
+        PERMISSION.RESEARCH_READ,
+      ]);
+
+      expect(result).toBe(false);
+      expect(prismaMock.userSystemRole.findMany).not.toHaveBeenCalled();
+      expect(
+        prismaMock.organizationMembership.findUnique,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('userHasPermissions should enforce AND semantics across multiple permissions', async () => {
+      prismaMock.organizationMembership.findUnique.mockResolvedValue({
+        status: MembershipStatus.ACTIVE,
+        roleScope: RoleScope.ORGANIZATION,
+        organization: { status: OrganizationStatus.ACTIVE },
+        role: {
+          isActive: true,
+          scope: RoleScope.ORGANIZATION,
+          rolePermissions: [{ permission: { code: PERMISSION.RESEARCH_READ } }],
+        },
+      });
+
+      const result = await service.userHasPermissions(
+        'user-1',
+        [PERMISSION.RESEARCH_READ, PERMISSION.REPORTS_EXPORT],
+        'org-1',
+      );
+
+      expect(result).toBe(false);
     });
   });
 });
