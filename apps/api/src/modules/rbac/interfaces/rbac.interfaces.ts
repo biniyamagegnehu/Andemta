@@ -1,4 +1,4 @@
-import { RoleScope } from '@prisma/client';
+import { RoleScope, OrganizationType } from '@prisma/client';
 import { PermissionCode } from '../constants/permissions';
 
 /**
@@ -48,4 +48,17 @@ export interface SyncSummary {
   missingPermissions: string[];
   /** Any role scope:code keys from the mapping that were not found in the database. */
   missingRoles: string[];
+}
+
+/**
+ * Validated organization authorization context attached to the HTTP request
+ * by OrganizationAuthGuard / PermissionsGuard and read by @CurrentOrganization().
+ */
+export interface OrganizationContext {
+  organizationId: string;
+  organizationType: OrganizationType;
+  userId: string;
+  membershipId: string;
+  roleCode: string;
+  permissions: PermissionCode[];
 }
