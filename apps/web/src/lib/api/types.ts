@@ -191,3 +191,24 @@ export interface PaginatedOrganizationsData {
   items: UserOrganization[];
   meta: ApiPaginationMeta;
 }
+
+/**
+ * Effective system-level authorization context returned by GET /api/v1/authorization/system.
+ */
+export interface SystemAuthorizationContext {
+  userId: string;
+  systemRoles: string[];
+  permissions: string[];
+}
+
+/**
+ * Effective organization-level authorization context returned by
+ * GET /api/v1/authorization/organizations/:organizationId.
+ */
+export interface OrganizationAuthorizationContext {
+  organizationId: string;
+  organizationType: OrganizationType;
+  roleCode: string;
+  membershipStatus: 'ACTIVE';
+  permissions: string[];
+}
