@@ -6,6 +6,7 @@ import {
   FlaskConical,
   LayoutDashboard,
   PackageCheck,
+  ShieldCheck,
   Users,
 } from 'lucide-react';
 import type { NavIconKey } from '@/config/navigation';
@@ -32,5 +33,7 @@ export function NavIcon({
       return <Users className={className} aria-hidden="true" />;
     case 'reports':
       return <BarChart3 className={className} aria-hidden="true" />;
+    case 'admin-users':
+      return <ShieldCheck className={className} aria-hidden="true" />;
   }
 }

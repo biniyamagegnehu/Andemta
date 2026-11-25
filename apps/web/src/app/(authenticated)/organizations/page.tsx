@@ -3,6 +3,7 @@
 import React from 'react';
 import { Building2, Check, Loader2 } from 'lucide-react';
 import { useOrganizations } from '@/context/organization-context';
+import { PermissionGate } from '@/components/auth/permission-gate';
 import { DashboardPageHeader } from '@/components/layout/dashboard-page-header';
 import { EmptyState } from '@/components/layout/empty-state';
 
@@ -21,6 +22,23 @@ export default function OrganizationsPage() {
       <DashboardPageHeader
         title="Organizations"
         description="Active organizations associated with your Andemta account."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <PermissionGate scope="organization" permission="organization.update">
+              <span className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                Can edit selected organization
+              </span>
+            </PermissionGate>
+            <PermissionGate
+              scope="organization"
+              permission="organization.members.invite"
+            >
+              <span className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
+                Can manage members
+              </span>
+            </PermissionGate>
+          </div>
+        }
       />
 
       {isLoading ? (

@@ -4,7 +4,13 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { AUTHENTICATED_NAV_ITEMS } from '@/config/navigation';
+import {
+  AUTHENTICATED_NAV_ITEMS,
+  filterNavigationItems,
+} from '@/config/navigation';
+import { useAuth } from '@/context/use-auth';
+import { useOrganizations } from '@/context/organization-context';
+import { useAuthorization } from '@/context/authorization-context';
 import { NavIcon } from './nav-icon';
 
 export interface AppSidebarProps {
@@ -14,6 +20,25 @@ export interface AppSidebarProps {
 
 export function AppSidebar({ collapsed, onToggleCollapse }: AppSidebarProps) {
   const pathname = usePathname();
+  const { isAuthenticated } = useAuth();
+  const { selectedOrganizationId } = useOrganizations();
+  const {
+    isSystemLoading,
+    isOrganizationLoading,
+    error,
+    systemPermissions,
+    organizationPermissions,
+  } = useAuthorization();
+
+  const visibleNavItems = filterNavigationItems(AUTHENTICATED_NAV_ITEMS, {
+    isAuthenticated,
+    isSystemLoading,
+    isOrganizationLoading,
+    hasError: error !== null,
+    systemPermissions,
+    organizationPermissions,
+    hasSelectedOrganization: selectedOrganizationId !== null,
+  });
 
   return (
     <aside
@@ -60,7 +85,7 @@ export function AppSidebar({ collapsed, onToggleCollapse }: AppSidebarProps) {
 
       {/* Navigation items */}
       <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">
-        {AUTHENTICATED_NAV_ITEMS.map((item) => {
+        {visibleNavItems.map((item) => {
           const isActive =
             pathname === item.href || pathname?.startsWith(`${item.href}/`);
 

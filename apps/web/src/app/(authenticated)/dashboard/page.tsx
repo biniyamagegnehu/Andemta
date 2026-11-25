@@ -5,23 +5,44 @@ import Link from 'next/link';
 import { ArrowRight, Building2, CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/use-auth';
 import { useOrganizations } from '@/context/organization-context';
-import { AUTHENTICATED_NAV_ITEMS } from '@/config/navigation';
+import { useAuthorization } from '@/context/authorization-context';
+import {
+  AUTHENTICATED_NAV_ITEMS,
+  filterNavigationItems,
+} from '@/config/navigation';
 import { DashboardPageHeader } from '@/components/layout/dashboard-page-header';
 import { EmptyState } from '@/components/layout/empty-state';
 import { NavIcon } from '@/components/layout/nav-icon';
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const {
     organizations,
     selectedOrganization,
+    selectedOrganizationId,
     isLoading,
     error,
     reloadOrganizations,
   } = useOrganizations();
+  const {
+    isSystemLoading,
+    isOrganizationLoading,
+    error: authError,
+    systemPermissions,
+    organizationPermissions,
+  } = useAuthorization();
 
-  const sectionLinks = AUTHENTICATED_NAV_ITEMS.filter(
-    (item) => item.href !== '/dashboard',
+  const sectionLinks = filterNavigationItems(
+    AUTHENTICATED_NAV_ITEMS.filter((item) => item.href !== '/dashboard'),
+    {
+      isAuthenticated,
+      isSystemLoading,
+      isOrganizationLoading,
+      hasError: authError !== null,
+      systemPermissions,
+      organizationPermissions,
+      hasSelectedOrganization: selectedOrganizationId !== null,
+    },
   );
 
   return (

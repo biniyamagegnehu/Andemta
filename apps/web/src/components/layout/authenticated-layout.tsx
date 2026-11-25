@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/use-auth';
 import { OrganizationProvider } from '@/context/organization-context';
+import { AuthorizationProvider } from '@/context/authorization-context';
 import { getSafeRedirectUrl } from '@/lib/api';
 import { AppSidebar } from './app-sidebar';
 import { MobileNavigation } from './mobile-navigation';
@@ -61,25 +62,27 @@ export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
 
   return (
     <OrganizationProvider>
-      <div className="flex min-h-screen w-full overflow-x-hidden bg-slate-50 text-slate-900">
-        <AppSidebar
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
-        />
+      <AuthorizationProvider>
+        <div className="flex min-h-screen w-full overflow-x-hidden bg-slate-50 text-slate-900">
+          <AppSidebar
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
+          />
 
-        <MobileNavigation
-          isOpen={mobileMenuOpen}
-          onClose={() => setMobileMenuOpen(false)}
-        />
+          <MobileNavigation
+            isOpen={mobileMenuOpen}
+            onClose={() => setMobileMenuOpen(false)}
+          />
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <AppHeader onOpenMobileMenu={() => setMobileMenuOpen(true)} />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <AppHeader onOpenMobileMenu={() => setMobileMenuOpen(true)} />
 
-          <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
-            <div className="mx-auto w-full max-w-7xl">{children}</div>
-          </main>
+            <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+              <div className="mx-auto w-full max-w-7xl">{children}</div>
+            </main>
+          </div>
         </div>
-      </div>
+      </AuthorizationProvider>
     </OrganizationProvider>
   );
 }

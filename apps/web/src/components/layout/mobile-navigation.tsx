@@ -4,7 +4,13 @@ import React, { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { X } from 'lucide-react';
-import { AUTHENTICATED_NAV_ITEMS } from '@/config/navigation';
+import {
+  AUTHENTICATED_NAV_ITEMS,
+  filterNavigationItems,
+} from '@/config/navigation';
+import { useAuth } from '@/context/use-auth';
+import { useOrganizations } from '@/context/organization-context';
+import { useAuthorization } from '@/context/authorization-context';
 import { NavIcon } from './nav-icon';
 
 export interface MobileNavigationProps {
@@ -14,6 +20,25 @@ export interface MobileNavigationProps {
 
 export function MobileNavigation({ isOpen, onClose }: MobileNavigationProps) {
   const pathname = usePathname();
+  const { isAuthenticated } = useAuth();
+  const { selectedOrganizationId } = useOrganizations();
+  const {
+    isSystemLoading,
+    isOrganizationLoading,
+    error,
+    systemPermissions,
+    organizationPermissions,
+  } = useAuthorization();
+
+  const visibleNavItems = filterNavigationItems(AUTHENTICATED_NAV_ITEMS, {
+    isAuthenticated,
+    isSystemLoading,
+    isOrganizationLoading,
+    hasError: error !== null,
+    systemPermissions,
+    organizationPermissions,
+    hasSelectedOrganization: selectedOrganizationId !== null,
+  });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -76,7 +101,7 @@ export function MobileNavigation({ isOpen, onClose }: MobileNavigationProps) {
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          {AUTHENTICATED_NAV_ITEMS.map((item) => {
+          {visibleNavItems.map((item) => {
             const isActive =
               pathname === item.href || pathname?.startsWith(`${item.href}/`);
 
