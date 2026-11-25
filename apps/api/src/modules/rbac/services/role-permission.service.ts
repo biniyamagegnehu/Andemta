@@ -223,6 +223,66 @@ export class RolePermissionService {
   }
 
   /**
+   * Loads both active system role codes and active system permission codes
+   * for an authenticated user in a single query.
+   */
+  async getUserSystemAuthorizationContext(userId: string): Promise<{
+    userId: string;
+    systemRoles: string[];
+    permissions: PermissionCode[];
+  }> {
+    const userSystemRoles = await this.prisma.userSystemRole.findMany({
+      where: {
+        userId,
+        roleScope: RoleScope.SYSTEM,
+        role: {
+          isActive: true,
+          scope: RoleScope.SYSTEM,
+        },
+      },
+      select: {
+        role: {
+          select: {
+            code: true,
+            rolePermissions: {
+              where: {
+                permission: {
+                  isActive: true,
+                },
+              },
+              select: {
+                permission: {
+                  select: {
+                    code: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const roleCodes = new Set<string>();
+    const granted = new Set<PermissionCode>();
+
+    for (const assignment of userSystemRoles) {
+      roleCodes.add(assignment.role.code);
+      for (const rp of assignment.role.rolePermissions) {
+        if (isValidPermissionCode(rp.permission.code)) {
+          granted.add(rp.permission.code);
+        }
+      }
+    }
+
+    return {
+      userId,
+      systemRoles: Array.from(roleCodes),
+      permissions: Array.from(granted),
+    };
+  }
+
+  /**
    * Loads all active organization-level permission codes granted to a user
    * within a specific organization in a single database query.
    *
