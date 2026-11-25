@@ -11,6 +11,7 @@ import { JobsModule } from './jobs/jobs.module';
 import { HealthModule } from './health/health.module';
 import { ExampleModule } from './example/example.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { RbacModule } from './modules/rbac/rbac.module';
 import { AppThrottlerGuard } from './modules/auth/guards/app-throttler.guard';
 import { RedisThrottlerStorage } from './modules/auth/throttler/redis-throttler-storage.service';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
@@ -23,6 +24,7 @@ import { REQUEST_ID_HEADER } from './common/constants';
     RedisModule,
     JobsModule,
     AuthModule,
+    RbacModule,
     ThrottlerModule.forRootAsync({
       imports: [RedisModule, AppConfigModule],
       inject: [RedisService, ConfigService],
