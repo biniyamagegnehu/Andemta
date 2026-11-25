@@ -5,6 +5,7 @@ module.exports = {
   rootDir: '.',
   moduleFileExtensions: ['js', 'json', 'ts', 'tsx'],
   testRegex: '.*\\.spec\\.(ts|tsx)$',
+  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/e2e/'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
