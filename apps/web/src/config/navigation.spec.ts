@@ -33,6 +33,7 @@ describe('Authenticated Navigation Configuration & Permission Filtering', () => 
       'Product Testing',
     );
     expect(getAuthenticatedPageTitle('/admin/users')).toBe('Admin Users');
+    expect(getAuthenticatedPageTitle('/profile')).toBe('Profile');
     expect(getAuthenticatedPageTitle('/unknown-path')).toBe('Dashboard');
     expect(getAuthenticatedPageTitle(null)).toBe('Dashboard');
   });
