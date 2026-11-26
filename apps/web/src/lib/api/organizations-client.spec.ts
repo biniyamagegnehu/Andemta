@@ -4,6 +4,7 @@ import {
   tokenManager,
   ApiError,
   type PaginatedOrganizationsData,
+  type UserOrganization,
 } from '@/lib/api';
 
 describe('organizationsClient', () => {
@@ -17,22 +18,22 @@ describe('organizationsClient', () => {
     jest.restoreAllMocks();
   });
 
+  const sampleOrg: UserOrganization = {
+    id: 'org-1',
+    name: 'Addis Insights',
+    slug: 'addis-insights',
+    type: 'BUSINESS',
+    status: 'ACTIVE',
+    createdAt: '2026-11-25T00:00:00.000Z',
+    updatedAt: '2026-11-25T00:00:00.000Z',
+    roleCode: 'OWNER',
+  };
+
   it('fetches authenticated user organizations using in-memory Bearer token', async () => {
     tokenManager.setAccessToken('in-memory-access-token');
 
     const mockData: PaginatedOrganizationsData = {
-      items: [
-        {
-          id: 'org-1',
-          name: 'Addis Insights',
-          slug: 'addis-insights',
-          type: 'BUSINESS',
-          status: 'ACTIVE',
-          createdAt: '2026-11-25T00:00:00.000Z',
-          updatedAt: '2026-11-25T00:00:00.000Z',
-          roleCode: 'OWNER',
-        },
-      ],
+      items: [sampleOrg],
       meta: {
         total: 1,
         page: 1,
@@ -60,14 +61,98 @@ describe('organizationsClient', () => {
     );
   });
 
+  it('creates an organization via POST /organizations without sending role or status', async () => {
+    tokenManager.setAccessToken('in-memory-access-token');
+
+    const requestSpy = jest
+      .spyOn(apiClient, 'request')
+      .mockResolvedValue(sampleOrg);
+
+    const result = await organizationsClient.createOrganization({
+      name: 'Addis Insights',
+      slug: 'addis-insights',
+      type: 'BUSINESS',
+    });
+
+    expect(result).toEqual(sampleOrg);
+    expect(requestSpy).toHaveBeenCalledWith(
+      '/organizations',
+      expect.objectContaining({
+        method: 'POST',
+        body: {
+          name: 'Addis Insights',
+          slug: 'addis-insights',
+          type: 'BUSINESS',
+        },
+        headers: expect.objectContaining({
+          Authorization: 'Bearer in-memory-access-token',
+        }),
+      }),
+    );
+  });
+
+  it('fetches a single organization via GET /organizations/:organizationId', async () => {
+    tokenManager.setAccessToken('in-memory-access-token');
+
+    const requestSpy = jest
+      .spyOn(apiClient, 'request')
+      .mockResolvedValue(sampleOrg);
+
+    const result = await organizationsClient.getOrganization('org-1');
+
+    expect(result).toEqual(sampleOrg);
+    expect(requestSpy).toHaveBeenCalledWith(
+      '/organizations/org-1',
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer in-memory-access-token',
+        }),
+      }),
+    );
+  });
+
+  it('updates an organization via PATCH /organizations/:organizationId', async () => {
+    tokenManager.setAccessToken('in-memory-access-token');
+    const updatedOrg: UserOrganization = {
+      ...sampleOrg,
+      name: 'Addis Insights Updated',
+      type: 'UNIVERSITY',
+    };
+
+    const requestSpy = jest
+      .spyOn(apiClient, 'request')
+      .mockResolvedValue(updatedOrg);
+
+    const result = await organizationsClient.updateOrganization('org-1', {
+      name: 'Addis Insights Updated',
+      type: 'UNIVERSITY',
+    });
+
+    expect(result).toEqual(updatedOrg);
+    expect(requestSpy).toHaveBeenCalledWith(
+      '/organizations/org-1',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: {
+          name: 'Addis Insights Updated',
+          type: 'UNIVERSITY',
+        },
+        headers: expect.objectContaining({
+          Authorization: 'Bearer in-memory-access-token',
+        }),
+      }),
+    );
+  });
+
   it('propagates ApiError when backend request fails', async () => {
     tokenManager.setAccessToken('in-memory-access-token');
     jest
       .spyOn(apiClient, 'request')
-      .mockRejectedValue(new ApiError('Internal server error', 500));
+      .mockRejectedValue(new ApiError('Forbidden', 403));
 
-    await expect(organizationsClient.listMyOrganizations()).rejects.toThrow(
-      'Internal server error',
+    await expect(organizationsClient.getOrganization('org-1')).rejects.toThrow(
+      'Forbidden',
     );
   });
 });
