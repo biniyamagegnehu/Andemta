@@ -212,3 +212,33 @@ export interface OrganizationAuthorizationContext {
   membershipStatus: 'ACTIVE';
   permissions: string[];
 }
+
+/**
+ * Supported user interface languages matching backend UpdateProfileDto.
+ */
+export type ProfileLanguage = 'en' | 'am' | 'om' | 'ti';
+
+/**
+ * Safe self-service user profile returned by GET /api/v1/users/me and PATCH /api/v1/users/me.
+ */
+export interface UserProfile {
+  id: string;
+  email: string;
+  emailVerifiedAt: string | null;
+  fullName: string | null;
+  phoneNumber: string | null;
+  preferredLanguage: ProfileLanguage;
+  bio: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Editable profile payload for PATCH /api/v1/users/me.
+ */
+export interface UpdateProfileDto {
+  fullName?: string | null;
+  phoneNumber?: string | null;
+  preferredLanguage?: ProfileLanguage;
+  bio?: string | null;
+}

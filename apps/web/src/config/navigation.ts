@@ -170,6 +170,9 @@ export function filterNavigationItems(
  */
 export function getAuthenticatedPageTitle(pathname: string | null): string {
   if (!pathname) return 'Dashboard';
+  if (pathname === '/profile' || pathname.startsWith('/profile/')) {
+    return 'Profile';
+  }
   const match = AUTHENTICATED_NAV_ITEMS.find(
     (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
   );

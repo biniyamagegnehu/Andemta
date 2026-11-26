@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, LogOut, Mail } from 'lucide-react';
+import { ChevronDown, LogOut, Mail, User } from 'lucide-react';
 import { useAuth } from '@/context/use-auth';
 
 /**
@@ -102,7 +103,17 @@ export function UserAccountMenu() {
             )}
           </div>
 
-          <div className="pt-1.5">
+          <div className="space-y-1 pt-1.5">
+            <Link
+              href="/profile"
+              role="menuitem"
+              onClick={() => setIsOpen(false)}
+              className="flex min-h-[40px] w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+            >
+              <User className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+              <span>Profile</span>
+            </Link>
+
             <button
               type="button"
               role="menuitem"
