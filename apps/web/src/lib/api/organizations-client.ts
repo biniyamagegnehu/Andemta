@@ -1,5 +1,10 @@
 import { authenticatedRequest } from './auth-client';
-import type { PaginatedOrganizationsData } from './types';
+import type {
+  CreateOrganizationDto,
+  PaginatedOrganizationsData,
+  UpdateOrganizationDto,
+  UserOrganization,
+} from './types';
 
 export interface ListMyOrganizationsParams {
   page?: number;
@@ -7,7 +12,7 @@ export interface ListMyOrganizationsParams {
 }
 
 /**
- * Client for Phase 4.5 Organization endpoints.
+ * Client for Phase 4.5 / 5.2 Organization endpoints.
  * Uses authenticatedRequest so in-memory Bearer token and single-flight refresh are reused.
  */
 export const organizationsClient = {
@@ -21,5 +26,36 @@ export const organizationsClient = {
         limit: params.limit ?? 50,
       },
     });
+  },
+
+  async createOrganization(
+    dto: CreateOrganizationDto,
+  ): Promise<UserOrganization> {
+    return authenticatedRequest<UserOrganization>('/organizations', {
+      method: 'POST',
+      body: dto,
+    });
+  },
+
+  async getOrganization(organizationId: string): Promise<UserOrganization> {
+    return authenticatedRequest<UserOrganization>(
+      `/organizations/${encodeURIComponent(organizationId)}`,
+      {
+        method: 'GET',
+      },
+    );
+  },
+
+  async updateOrganization(
+    organizationId: string,
+    dto: UpdateOrganizationDto,
+  ): Promise<UserOrganization> {
+    return authenticatedRequest<UserOrganization>(
+      `/organizations/${encodeURIComponent(organizationId)}`,
+      {
+        method: 'PATCH',
+        body: dto,
+      },
+    );
   },
 };

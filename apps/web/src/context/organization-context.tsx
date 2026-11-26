@@ -41,7 +41,7 @@ export interface OrganizationContextValue {
   hasLoaded: boolean;
   error: string | null;
   selectOrganization: (organizationId: string) => void;
-  reloadOrganizations: () => Promise<void>;
+  reloadOrganizations: (preferredOrgId?: string) => Promise<void>;
 }
 
 export const OrganizationContext = createContext<
@@ -58,41 +58,44 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
   const [hasLoaded, setHasLoaded] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadOrganizations = useCallback(async () => {
-    if (!isAuthenticated) {
-      setOrganizations([]);
-      setSelectedOrganizationId(null);
-      setHasLoaded(false);
+  const loadOrganizations = useCallback(
+    async (preferredOrgId?: string) => {
+      if (!isAuthenticated) {
+        setOrganizations([]);
+        setSelectedOrganizationId(null);
+        setHasLoaded(false);
+        setError(null);
+        return;
+      }
+
+      setIsLoading(true);
       setError(null);
-      return;
-    }
 
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const response = await organizationsClient.listMyOrganizations({
-        page: 1,
-        limit: 50,
-      });
-      const items = Array.isArray(response?.items) ? response.items : [];
-      setOrganizations(items);
-      setSelectedOrganizationId((prev) =>
-        resolveValidOrganizationId(items, prev),
-      );
-    } catch (err: unknown) {
-      const message =
-        err instanceof ApiError
-          ? err.message
-          : 'Unable to load your organizations.';
-      setError(message);
-      setOrganizations([]);
-      setSelectedOrganizationId(null);
-    } finally {
-      setIsLoading(false);
-      setHasLoaded(true);
-    }
-  }, [isAuthenticated]);
+      try {
+        const response = await organizationsClient.listMyOrganizations({
+          page: 1,
+          limit: 50,
+        });
+        const items = Array.isArray(response?.items) ? response.items : [];
+        setOrganizations(items);
+        setSelectedOrganizationId((prev) =>
+          resolveValidOrganizationId(items, preferredOrgId ?? prev),
+        );
+      } catch (err: unknown) {
+        const message =
+          err instanceof ApiError
+            ? err.message
+            : 'Unable to load your organizations.';
+        setError(message);
+        setOrganizations([]);
+        setSelectedOrganizationId(null);
+      } finally {
+        setIsLoading(false);
+        setHasLoaded(true);
+      }
+    },
+    [isAuthenticated],
+  );
 
   useEffect(() => {
     if (!isInitialized) return;

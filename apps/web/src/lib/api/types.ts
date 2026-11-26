@@ -193,6 +193,23 @@ export interface PaginatedOrganizationsData {
 }
 
 /**
+ * Request payload for POST /api/v1/organizations.
+ */
+export interface CreateOrganizationDto {
+  name: string;
+  slug?: string;
+  type?: OrganizationType;
+}
+
+/**
+ * Request payload for PATCH /api/v1/organizations/:organizationId.
+ */
+export interface UpdateOrganizationDto {
+  name?: string;
+  type?: OrganizationType;
+}
+
+/**
  * Effective system-level authorization context returned by GET /api/v1/authorization/system.
  */
 export interface SystemAuthorizationContext {
